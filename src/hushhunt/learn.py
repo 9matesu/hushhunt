@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .db import bump_weight, get_weights, set_stage
@@ -15,6 +15,43 @@ STATE_MAP = {
     "duplicate": ("duplicate", False),
     "no reply": ("pending", None),
 }
+
+
+def demoted_modules(conn) -> set[str]:
+    """Modules currently auto-demoted (not expired): the pipeline refuses to
+    run them, and the planner rejects proposals for them, until `undemote`
+    or expiry."""
+    now = datetime.now(timezone.utc).isoformat()
+    return {r["module"] for r in conn.execute(
+        "SELECT module FROM demoted WHERE until > ?", (now,))}
+
+
+def undemote(conn, module: str) -> None:
+    conn.execute("DELETE FROM demoted WHERE module=?", (module,))
+    conn.commit()
+
+
+def auto_demote(conn, cfg=None, precision_floor: float = 0.25,
+                min_n: int = 4, days: int = 30) -> list[str]:
+    """Self-improvement's brake: a check/module whose observed precision
+    dropped below the floor with enough samples is silenced for `days`.
+    One accepted outcome after demotion is the human's cue to `undemote` —
+    the tool never re-enables its own noisy modules silently."""
+    newly = []
+    for row in conn.execute(
+            "SELECT check_id, precision_ewma, n FROM weights WHERE n >= ?",
+            (min_n,)):
+        if row["precision_ewma"] < precision_floor:
+            until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+            cur = conn.execute(
+                """INSERT INTO demoted(module,until,reason) VALUES(?,?,?)
+                   ON CONFLICT(module) DO UPDATE SET until=excluded.until,
+                     reason=excluded.reason""",
+                (row["check_id"], until,
+                 f"precision {round(row['precision_ewma'], 2)} after n={row['n']}"))
+            newly.append(row["check_id"])
+    conn.commit()
+    return newly
 
 
 def record_outcome(conn, cfg, finding_id: int, check_id: str, state: str) -> float:
