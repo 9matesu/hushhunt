@@ -12,6 +12,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     nightly = sub.add_parser("run-nightly", help="full pipeline once")
     nightly.add_argument("--root", default=".")
+    nightly.add_argument("--sim", action="store_true",
+                         help="offline run against the built-in vulnapp (no network)")
     learn = sub.add_parser("learn", help="record one human-observed outcome")
     learn.add_argument("--root", default=".")
     learn.add_argument("--outcome", required=True,
@@ -36,7 +38,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     cfg = Config.load(args.root)
     if args.cmd == "run-nightly":
-        run_nightly(cfg)
+        if getattr(args, "sim", False):
+            from .sim import run_sim
+            run_sim(cfg)
+        else:
+            run_nightly(cfg)
         return 0
     if args.cmd == "learn":
         from .db import open_db

@@ -200,13 +200,14 @@ def active_probe(cfg, conn, program: dict, transport=None,
     ctx.graphql_urls = [f"{first[0].rstrip('/')}{r}" for r in routes
                         if "graph" in r][:2]
     # session modules: broker with the operator's own throwaway accounts
-    if ("idor" in names or "mass_assign" in names) and session_factory:
-        accts = load_accounts(cfg, program["id"])
+    if "idor" in names or "mass_assign" in names:
+        accts = load_accounts(cfg, program["id"]) if session_factory else []
         if len(accts) < 2:
             ask(cfg, program, "no_test_accounts",
-                f"{program['id']}: idor/mass_assign granted but "
-                "seeds/accounts.yaml has <2 accounts for it",
-                ["register 2 throwaway accounts", "revoke the deep grants"])
+                f"{program['id']}: idor/mass_assign granted but no usable "
+                "session accounts (register 2 throwaway accounts in "
+                "seeds/accounts.yaml or run without --sim)",
+                ["register accounts", "revoke the deep grants"])
         else:
             broker = SessionBroker(program, accts, client_factory=session_factory)
             try:
