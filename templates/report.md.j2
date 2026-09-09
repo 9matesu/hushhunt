@@ -16,8 +16,13 @@
 {% for ev in evidence %}```http
 {{ ev }}
 ```
-{% endfor %}
-## Recommended Remediation
+{% endfor %}{% if poc_script %}## PoC Script (re-runnable, sandboxed)
+```python
+{{ poc_script }}
+```
+
+One-liner: `{{ curl }}`
+{% endif %}## Recommended Remediation
 {{ remediation }}
 
 ## References

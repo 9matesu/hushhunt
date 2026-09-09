@@ -20,7 +20,7 @@ def _insert_finding(conn, signal_ids: list[int], stage: str, confidence: float |
 
 
 def triage_asset(conn, cfg, llm, program: dict, signals: list[dict], na_kb,
-                 weights: dict[str, float]) -> list[int]:
+                 weights: dict[str, float], granted: list[str] | None = None) -> list[int]:
     """One LLM call per (program, asset-batch). NA-KB matches first: free,
     deterministic, and it shrinks the prompt. Returns new finding ids
     (stage='triaged'). Raises TriageContractError without writing anything
@@ -40,7 +40,8 @@ def triage_asset(conn, cfg, llm, program: dict, signals: list[dict], na_kb,
                              "why": hit["why_rejected"]})
     if not kept:
         return new_ids  # everything was NA — never spend LLM tokens
-    user = build_user_prompt(program, [s for s, _ in kept], weights, na_kb_ids)
+    user = build_user_prompt(program, [s for s, _ in kept], weights, na_kb_ids,
+                             granted=granted)
     reply = llm.complete_json(SYSTEM_PROMPT, user)
     if not isinstance(reply, dict):
         raise TriageContractError("reply is not a JSON object")

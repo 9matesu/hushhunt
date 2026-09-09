@@ -46,6 +46,18 @@ def world(tmp_path):
     return conn, cfg, frow, [sig]
 
 
+def test_poc_script_and_curl_appear_when_present(world):
+    conn, cfg, frow, sigs = world
+    conn.execute("INSERT INTO poc_scripts(finding_id,code,language,ok_last_run,ran_at) "
+                 "VALUES(?,?, 'python',1,'now')", (frow["id"], "client.fetch(url)\nresult['ok']=True"))
+    conn.commit()
+    path = render_report(conn, cfg, frow, sigs, CHECK_CATALOG)
+    body = Path(path).read_text(encoding="utf-8")
+    assert "## PoC Script (re-runnable, sandboxed)" in body
+    assert "client.fetch(url)" in body
+    assert "One-liner: `curl" in body          # derived from evidence capture
+
+
 def test_report_contains_all_sections_and_evidence(world):
     conn, cfg, frow, sigs = world
     path = render_report(conn, cfg, frow, sigs, CHECK_CATALOG)

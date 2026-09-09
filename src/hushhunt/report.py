@@ -44,6 +44,26 @@ def _evidence_texts(signals: list[dict], cap: int = 4096) -> list[str]:
     return out
 
 
+def _curl_one_liner(signals: list[dict]) -> str:
+    """Derive a copy-paste repro command from the FIRST captured request file
+    (001_req.http), redacted exactly as stored — the report never invents."""
+    for s in signals:
+        d = Path(s.get("evidence_dir") or "")
+        if not d.is_dir():
+            continue
+        reqs = sorted(d.glob("*_req.http"))
+        if not reqs:
+            continue
+        first = reqs[0].read_text(encoding="utf-8", errors="replace").splitlines()[0]
+        parts = first.split()
+        if len(parts) < 2:
+            continue
+        method, url = parts[0], parts[1]
+        flags = f"-X {method} " if method != "GET" else ""
+        return f"curl {flags}'{url}'"
+    return ""
+
+
 def render_report(conn, cfg, finding: dict, signals: list[dict], catalog) -> str:
     """finding: row dict with detail_json holding the triage decision.
     Writes out/reports/<pid>-<fid>-<slug>.md, flips stage to 'reported'.
@@ -70,6 +90,11 @@ def render_report(conn, cfg, finding: dict, signals: list[dict], catalog) -> str
                 steps.append(f"Reproduce the passive request captured for {s['check_id']}.")
     steps = list(dict.fromkeys(steps)) or ["Follow the captured PoC requests below."]
 
+    poc_rows = conn.execute(
+        "SELECT code FROM poc_scripts WHERE finding_id=? AND ok_last_run=1",
+        (finding["id"],)).fetchall()
+    poc_script = poc_rows[0]["code"] if poc_rows else ""
+
     env = Environment(loader=FileSystemLoader(_template_dirs(cfg)),
                       autoescape=False, keep_trailing_newline=True)
     body = env.get_template("report.md.j2").render(
@@ -80,6 +105,8 @@ def render_report(conn, cfg, finding: dict, signals: list[dict], catalog) -> str
         impact=detail.get("impact", ""),
         steps=steps,
         evidence=_evidence_texts(signals),
+        poc_script=poc_script,
+        curl=_curl_one_liner(signals),
         remediation=_remediation(first.get("check_id", "")),
         refs=[WSTG_BASE, cfg.get("program_url") or first.get("asset", "")],
     )

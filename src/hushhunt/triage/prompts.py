@@ -11,14 +11,18 @@ report-quality rules. Rules:
 - Weight context: this tool's per-check historical precision is provided; trust
   low-precision checks skeptically.
 - For every accepted finding produce CVSS v3.1 vector and one-sentence IMPACT.
+- When the granted modules list is non-empty, you MAY request deeper testing:
+  set "requires_poc": true on accepted findings whose impact you want proven
+  by a re-runnable PoC script (the pipeline will synthesize + run it; failure
+  drops the finding). NEVER list or request a module that is not granted.
 - Output ONLY JSON: {"findings":[{"signal_ids":[..],"title":"..","severity":"low|medium|high|critical",
   "cvss":"CVSS:3.1/..","impact":"..","confidence":0.0-1.0,"reasoning":"..",
-  "dedupe_key":"short-stable-slug"}],
+  "requires_poc":true|false,"dedupe_key":"short-stable-slug"}],
   "dismissed":[{"signal_ids":[..],"reason":"NA-PATTERN:<id>|<free>"}]}"""
 
 
 def build_user_prompt(program: dict, signals: list[dict], weights: dict[str, float],
-                      na_kb_ids: list[str]) -> str:
+                      na_kb_ids: list[str], granted: list[str] | None = None) -> str:
     import json
     policy = (program.get("policy_text") or "")[:2000]
     slim = [{"signal_id": s["id"], "check_id": s.get("check_id"),
@@ -32,5 +36,7 @@ def build_user_prompt(program: dict, signals: list[dict], weights: dict[str, flo
         f"HISTORICAL PER-CHECK PRECISION (0..1, from your owner's outcomes):\n"
         f"{json.dumps(weights, indent=1)}\n\n"
         f"ALREADY-NA-KNOWLEDGE (do not re-argue these):\n{json.dumps(na_kb_ids)}\n\n"
+        f"GRANTED DEEP-TEST MODULES (empty = passive evidence only):\n"
+        f"{json.dumps(granted or [])}\n\n"
         f"SIGNALS:\n{json.dumps(slim, indent=1)}\n"
     )
