@@ -23,4 +23,5 @@ CWE_MAP: dict[str, str] = {
     "blind_oast": "CWE-918",               # SSRF
     "mass_assign": "CWE-915",              # mass assignment
     "cmd_inject": "CWE-77",                # command injection
+    "nuclei_sweep": "CWE-1104",            # use of unmaintained third-party components (template-driven findings)
 }

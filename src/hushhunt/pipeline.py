@@ -26,6 +26,7 @@ import hushhunt.checks.active.redirect   # noqa: F401
 import hushhunt.checks.active.graphql    # noqa: F401
 import hushhunt.checks.active.blind      # noqa: F401
 import hushhunt.checks.active.cmdinject  # noqa: F401
+import hushhunt.checks.active.nuclei_check  # noqa: F401
 import hushhunt.checks.active.massassign  # noqa: F401
 from .checks.active import ACTIVE_MODULES
 from .crawl import crawl
@@ -263,6 +264,16 @@ def active_probe(cfg, conn, program: dict, transport=None,
                             n += _store_signals(conn, program, hc, first[0], [sig])
                     except Exception:
                         pass
+    if "nuclei_sweep" in names:
+        try:
+            from .nuclei_runner import run_nuclei
+            urls = list(dict.fromkeys(p[0] for p in params[:20])) or first
+            for sig in run_nuclei(cfg, conn, program, urls):
+                n += _store_signals(conn, program, hc, first[0], [sig])
+        except PermissionError:
+            pass     # grant vanished mid-run: correct fail-closed behavior
+        except Exception as e:
+            print(f"NUCLEI-WARN {type(e).__name__}: {e}")
     return n
 
 
@@ -395,6 +406,8 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
     try:
         auto_demote(conn, cfg)
         propose_playbook_patch(conn, cfg)
+        from .sarif import export_sarif
+        export_sarif(conn, cfg)
     except Exception:
         pass
     reqs = conn.execute("SELECT COUNT(*) c FROM request_log").fetchone()["c"]

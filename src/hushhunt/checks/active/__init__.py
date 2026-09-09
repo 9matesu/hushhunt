@@ -15,4 +15,5 @@ ACTIVE_MODULES: dict[str, str] = {
     "blind_oast": "deep",
     "mass_assign": "deep",
     "cmd_inject": "deep",
+    "nuclei_sweep": "deep",
 }

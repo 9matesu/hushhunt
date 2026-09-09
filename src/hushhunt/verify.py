@@ -19,7 +19,7 @@ LIVE_CONFIRM_REQUIRED = {"exposed_files", "cors_misconfig", "js_secret_leak",
 # live sessions/OAST) => they must carry an EXECUTED poc_script to verify.
 POC_REQUIRED = {"idor", "mass_assign", "jwt_misuse", "graphql_probe",
                 "blind_oast", "sqli_boolean", "xss_dom", "js_endpoints",
-                "cmd_inject"}
+                "cmd_inject", "nuclei_sweep"}
 
 _STATUS_RE = re.compile(r"^HTTP/1\.1 (\d+)")
 _HEADER_RE = re.compile(r"^([A-Za-z0-9\-]+):\s*(.*)$")
