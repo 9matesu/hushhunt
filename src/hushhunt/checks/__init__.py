@@ -31,6 +31,7 @@ class Ctx:
     owned_urls: list = field(default_factory=list)  # [(url, fingerprint)] seen by A
     own_jwt=None                                    # tester's own JWT (jwt checks)
     jwt_api_url=None                                # endpoint to replay forged copies
+    graphql_urls: list = field(default_factory=list)  # crawler-found /graphql-ish
 
 
 CHECK_CATALOG: dict[str, CheckDef] = {}
