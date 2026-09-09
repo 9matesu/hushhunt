@@ -35,6 +35,7 @@ from .grants import active_grant, risk_allows
 from .http import BudgetExceeded, HardenedClient, OutOfScope
 from .learn import auto_demote, demoted_modules, propose_playbook_patch
 from .oast import OastClient
+from .operator import ask, drain_steer
 from .planner import plan as plan_tests
 from .policy_lint import allowed_module, lint_policy
 from .push import push_finding
@@ -200,20 +201,27 @@ def active_probe(cfg, conn, program: dict, transport=None,
     # session modules: broker with the operator's own throwaway accounts
     if ("idor" in names or "mass_assign" in names) and session_factory:
         accts = load_accounts(cfg, program["id"])
-        broker = SessionBroker(program, accts, client_factory=session_factory)
-        try:
-            ctx.session_a = broker.session(accts[0]["id"])
-            ctx.session_b = broker.session(accts[1]["id"]) if len(accts) > 1 else None
-        except (SessionError, RuntimeError, IndexError, KeyError):
-            ctx.session_a = ctx.session_b = None
-        ctx.profile_url = f"{first[0].rstrip('/')}/api/profile"
-        ctx.owned_urls = _owned_from_session(conn, program, ctx)
-        if "idor" in names and ctx.session_a and ctx.session_b:
-            for sig in CHECK_CATALOG["idor"].fn(ctx):
-                n += _store_signals(conn, program, hc, first[0], [sig])
-        if "mass_assign" in names and ctx.session_a:
-            for sig in CHECK_CATALOG["mass_assign"].fn(ctx):
-                n += _store_signals(conn, program, hc, first[0], [sig])
+        if len(accts) < 2:
+            ask(cfg, program, "no_test_accounts",
+                f"{program['id']}: idor/mass_assign granted but "
+                "seeds/accounts.yaml has <2 accounts for it",
+                ["register 2 throwaway accounts", "revoke the deep grants"])
+        else:
+            broker = SessionBroker(program, accts, client_factory=session_factory)
+            try:
+                ctx.session_a = broker.session(accts[0]["id"])
+                ctx.session_b = (broker.session(accts[1]["id"])
+                                 if len(accts) > 1 else None)
+            except (SessionError, RuntimeError, IndexError, KeyError):
+                ctx.session_a = ctx.session_b = None
+            ctx.profile_url = f"{first[0].rstrip('/')}/api/profile"
+            ctx.owned_urls = _owned_from_session(conn, program, ctx)
+            if "idor" in names and ctx.session_a and ctx.session_b:
+                for sig in CHECK_CATALOG["idor"].fn(ctx):
+                    n += _store_signals(conn, program, hc, first[0], [sig])
+            if "mass_assign" in names and ctx.session_a:
+                for sig in CHECK_CATALOG["mass_assign"].fn(ctx):
+                    n += _store_signals(conn, program, hc, first[0], [sig])
     # GET-based active modules
     for module in ("xss_reflected", "sqli_error", "sqli_boolean", "ssti",
                    "open_redirect_chain"):
@@ -240,20 +248,21 @@ def active_probe(cfg, conn, program: dict, transport=None,
                 n += _store_signals(conn, program, hc, first[0], [sig])
         except Exception:
             pass
-    if "blind_oast" in names:
-        ctx.oast = oast or OastClient(cfg)
-        try:
-            for sig in CHECK_CATALOG["blind_oast"].fn(ctx):
-                n += _store_signals(conn, program, hc, first[0], [sig])
-        except Exception:
-            pass
-    if "cmd_inject" in names:
-        ctx.oast = oast or OastClient(cfg)
-        try:
-            for sig in CHECK_CATALOG["cmd_inject"].fn(ctx):
-                n += _store_signals(conn, program, hc, first[0], [sig])
-        except Exception:
-            pass
+    if "blind_oast" in names or "cmd_inject" in names:
+        if oast is None and not cfg.get("oast.enabled", False):
+            ask(cfg, program, "oast_disabled",
+                f"{program['id']}: deep OAST modules granted but oast.enabled"
+                " is false — cannot prove blind bugs",
+                ["enable oast (self-host interactsh)", "revoke those grants"])
+        else:
+            ctx.oast = oast or OastClient(cfg)
+            for module in ("blind_oast", "cmd_inject"):
+                if module in names:
+                    try:
+                        for sig in CHECK_CATALOG[module].fn(ctx):
+                            n += _store_signals(conn, program, hc, first[0], [sig])
+                    except Exception:
+                        pass
     return n
 
 
@@ -283,7 +292,7 @@ def _signal_rows_for(conn, finding: dict) -> list[dict]:
 
 def triage_verify_report(cfg, conn, llm, program: dict, na_kb: NaKb,
                          live_fetch=None, poc_client=None,
-                         live_recheck=None) -> tuple[int, int, int]:
+                         live_recheck=None, focus=None) -> tuple[int, int, int]:
     """(triaged, verified, reported) — the positive-only funnel."""
     signals = [dict(r) for r in conn.execute(
         """SELECT s.* FROM signals s LEFT JOIN findings f ON f.signal_id=s.id
@@ -293,7 +302,7 @@ def triage_verify_report(cfg, conn, llm, program: dict, na_kb: NaKb,
     granted = [m["module"] for m in
                (granted_modules(conn, cfg, program) if llm else [])]
     triaged_ids = triage_asset(conn, cfg, llm, program, signals, na_kb,
-                               get_weights(conn), granted=granted)
+                               get_weights(conn), granted=granted, focus=focus)
     verified = reported = 0
     for fid in triaged_ids:
         f = dict(conn.execute("SELECT * FROM findings WHERE id=?", (fid,)).fetchone())
@@ -348,8 +357,14 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
     na_kb = NaKb.load(_seeds_path(cfg))
     programs = sync(cfg, conn, client_factory=client_factory)
     targets = pick_targets(conn, cfg, get_weights(conn))
+    steer = drain_steer(cfg)          # operator input between runs (REDCELL port)
+    if steer["skip"]:
+        targets = [t for t in targets if t["id"] not in steer["skip"]]
     ok = failed = sig_n = verified_n = reports_n = active_n = 0
     for prog in targets:
+        if steer["stop"]:
+            print("RUN-ABORT per operator steer (stop)")
+            break
         try:
             db_prog = dict(conn.execute(
                 "SELECT * FROM programs WHERE id=?", (prog["id"],)).fetchone())
@@ -369,7 +384,8 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
             _, v, r = triage_verify_report(cfg, conn, llm, prog, na_kb,
                                            live_fetch=live,
                                            poc_client=_poc_client(conn, cfg, prog,
-                                                                  transport))
+                                                                  transport),
+                                           focus=steer["focus"])
             verified_n += v
             reports_n += r
             ok += 1
@@ -382,9 +398,17 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
     except Exception:
         pass
     reqs = conn.execute("SELECT COUNT(*) c FROM request_log").fetchone()["c"]
+    usage = getattr(llm, "usage", None)
+    if usage:
+        (Path(cfg.root) / "var").mkdir(exist_ok=True)
+        (Path(cfg.root) / "var" / "llm_cost.json").write_text(
+            json.dumps(usage), encoding="utf-8")
+        cost_str = f" llm_calls={usage['calls']} llm_cost_usd={round(usage['cost_usd'], 4)}"
+    else:
+        cost_str = ""
     line = (f"RUN {datetime.now(timezone.utc).isoformat(timespec='seconds')} "
             f"ok={ok} failed={failed} programs_synced={programs} "
             f"signals={sig_n} active_reqs={active_n} verified={verified_n} "
-            f"reports={reports_n} requests={reqs}")
+            f"reports={reports_n} requests={reqs}{cost_str}")
     print(line)
     return line

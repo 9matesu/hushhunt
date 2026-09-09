@@ -2,6 +2,8 @@ llm:
   base_url: "https://api.b.ai/v1"   # 9router; use http://localhost:20128/v1 for TokenRouter/qwen
   model: "ag/glm-4.6"
   temperature: 0.0
+  prices:                       # USD per 1M tokens [input, output] (cost meter)
+    glm-4.6: [0.4, 1.6]         # local TokenRouter models: omit => cost 0 (honest)
 limits:
   rate_per_second_per_target: 1
   daily_requests_per_program: 150

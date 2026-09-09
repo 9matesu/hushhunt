@@ -22,7 +22,8 @@ report-quality rules. Rules:
 
 
 def build_user_prompt(program: dict, signals: list[dict], weights: dict[str, float],
-                      na_kb_ids: list[str], granted: list[str] | None = None) -> str:
+                      na_kb_ids: list[str], granted: list[str] | None = None,
+                      focus: list[str] | None = None) -> str:
     import json
     policy = (program.get("policy_text") or "")[:2000]
     slim = [{"signal_id": s["id"], "check_id": s.get("check_id"),
@@ -33,7 +34,9 @@ def build_user_prompt(program: dict, signals: list[dict], weights: dict[str, flo
         f"PROGRAM: {program['name']} ({program.get('platform','?')})\n"
         f"SAFE HARBOR: {program.get('safe_harbor')}\n"
         f"POLICY EXCERPT:\n{policy}\n\n"
-        f"HISTORICAL PER-CHECK PRECISION (0..1, from your owner's outcomes):\n"
+        + (f"OPERATOR FOCUS DIRECTIVES (from the hunter running this):\n"
+           + "\n".join(f"- {f}" for f in focus[:5]) + "\n\n" if focus else "")
+        + f"HISTORICAL PER-CHECK PRECISION (0..1, from your owner's outcomes):\n"
         f"{json.dumps(weights, indent=1)}\n\n"
         f"ALREADY-NA-KNOWLEDGE (do not re-argue these):\n{json.dumps(na_kb_ids)}\n\n"
         f"GRANTED DEEP-TEST MODULES (empty = passive evidence only):\n"
