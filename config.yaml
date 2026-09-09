@@ -1,0 +1,22 @@
+llm:
+  base_url: "https://api.b.ai/v1"   # 9router; use http://localhost:20128/v1 for TokenRouter/qwen
+  model: "ag/glm-4.6"
+  temperature: 0.0
+limits:
+  rate_per_second_per_target: 1
+  daily_requests_per_program: 150
+  max_requests_per_asset: 12
+  request_timeout_seconds: 10
+  user_agent: "hushhunt/0.1 (hunter=matco; contact=<account email>; https://github.com/9matesu/hushhunt)"
+selection:
+  small_target_max_bounty: 1500
+  new_program_days: 540
+  max_targets_per_night: 6
+  min_signals_to_triage: 1
+triage:
+  min_confidence: 0.75
+submit:
+  mode: "draft"
+platforms:
+  hackerone: {enabled: true}
+  bugcrowd: {enabled: true}
