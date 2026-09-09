@@ -21,8 +21,9 @@ def build_user_prompt(program: dict, signals: list[dict], weights: dict[str, flo
                       na_kb_ids: list[str]) -> str:
     import json
     policy = (program.get("policy_text") or "")[:2000]
-    slim = [{"signal_id": s["id"], "check_id": s["check_id"], "asset": s["asset"],
-             "severity_hint": s["severity_hint"], "wstg": s["wstg"],
+    slim = [{"signal_id": s["id"], "check_id": s.get("check_id"),
+             "asset": s.get("asset"), "severity_hint": s.get("severity_hint"),
+             "wstg": s.get("wstg"),
              "payload": json.loads(s["payload_json"])} for s in signals]
     return (
         f"PROGRAM: {program['name']} ({program.get('platform','?')})\n"

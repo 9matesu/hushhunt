@@ -16,11 +16,12 @@ KB = NaKb.load(Path(__file__).parent.parent / "seeds" / "na_kb.json")
 
 
 def _sig(conn, check_id="cors_misconfig", payload='{"issue":"reflected_arbitrary_origin"}'):
-    return dict(id=add_signal(conn, program_id="h1:1", asset="https://app.smallco.io",
-                              check_id=check_id, wstg="WSTG-CONF-07",
-                              severity_hint="medium", payload_json=payload,
-                              evidence_dir="e1"),
-                check_id=check_id, payload_json=payload)
+    sid = add_signal(conn, program_id="h1:1", asset="https://app.smallco.io",
+                     check_id=check_id, wstg="WSTG-CONF-07",
+                     severity_hint="medium", payload_json=payload, evidence_dir="e1")
+    return dict(id=sid, check_id=check_id, payload_json=payload,
+                asset="https://app.smallco.io", severity_hint="medium",
+                wstg="WSTG-CONF-07")
 
 
 def _stage_rows(conn):
