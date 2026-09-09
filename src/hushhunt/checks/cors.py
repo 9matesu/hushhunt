@@ -5,7 +5,7 @@ from . import Ctx, register, register_repro
 CANARY_ORIGIN = "https://hushhunt-canary.invalid"
 
 
-@register("cors_misconfig", "WSTG-CONF-07", "low")
+@register("cors_misconfig", "WSTG-CLNT-07", "low")
 def check_cors(ctx: Ctx) -> list[dict]:
     """ONE extra GET with a canary Origin header. Signal only on an exact
     echo of the canary, or wildcard ACAO combined with credentials — the two

@@ -32,6 +32,7 @@ class Ctx:
     own_jwt=None                                    # tester's own JWT (jwt checks)
     jwt_api_url=None                                # endpoint to replay forged copies
     graphql_urls: list = field(default_factory=list)  # crawler-found /graphql-ish
+    profile_url=None                                  # self profile endpoint (MA)
 
 
 CHECK_CATALOG: dict[str, CheckDef] = {}

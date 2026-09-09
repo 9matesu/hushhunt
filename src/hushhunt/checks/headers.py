@@ -18,7 +18,7 @@ def _redact(value: str) -> str:
     return value[:6]
 
 
-@register("passive_headers", "WSTG-CONF-04", "passive")
+@register("passive_headers", "WSTG-CONF-14", "passive")
 def check_headers(ctx: Ctx) -> list[dict]:
     resp = ctx.resp
     out: list[dict] = []

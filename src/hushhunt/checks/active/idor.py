@@ -5,7 +5,7 @@ from .. import register, register_repro
 MAX_OBJECTS = 3   # objects (ids) probed per path pattern, tiny by design
 
 
-@register("idor", "WSTG-ATHZ-01", "high")
+@register("idor", "WSTG-ATHZ-04", "high")
 def check_idor(ctx) -> list[dict]:
     """ctx.session_a / ctx.session_b: httpx.Clients logged in with the
     OPERATOR's throwaway accounts (never enumerated users). ctx.owned_urls:

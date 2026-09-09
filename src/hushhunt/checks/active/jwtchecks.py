@@ -42,7 +42,7 @@ def forge_hs256(token: str, secret: bytes) -> str:
 # (alg:none accepted / weak key recoverable) using our OWN claims.
 
 
-@register("jwt_misuse", "WSTG-SESS-05", "medium")
+@register("jwt_misuse", "WSTG-SESS-10", "medium")
 def check_jwt(ctx) -> list[dict]:
     """ctx.own_jwt: the TESTER ACCOUNT'S OWN token captured at login. All
     forgeries are LOCAL (alg-none, weak-HS256-key re-sign of own token); each

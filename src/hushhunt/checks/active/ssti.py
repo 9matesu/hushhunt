@@ -16,7 +16,7 @@ def _swap(url: str, param: str, value: str) -> str:
     return urlunparse(parsed._replace(query=urlencode(q, doseq=True)))
 
 
-@register("ssti", "WSTG-INPV-13", "medium")
+@register("ssti", "WSTG-INPV-18", "medium")
 def check_ssti(ctx) -> list[dict]:
     """Arithmetic canaries only ({{7*7}}->49). Signal iff the evaluated form
     appears for the probe AND the same digits are absent in the baseline

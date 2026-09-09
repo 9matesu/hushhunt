@@ -30,7 +30,7 @@ class OastClient:
 
     def http_canary(self, token: str) -> str:
         # the URL we inject as a probe payload (points at the OAST server)
-        return self.server + f"/hit/{token}"
+        return self.server + f"/hit?token={token}"
 
     def poll(self, token: str, tag: str | None = None,
              timeout_s: float | None = None) -> list[dict]:

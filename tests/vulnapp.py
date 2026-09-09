@@ -124,14 +124,24 @@ def handler(req: httpx.Request) -> httpx.Response:
                                       request=req)
         return httpx.Response(401, json={"error": "bad token"}, request=req)
     if path == "/api/profile":
-        if not logged_in(req):
+        who = logged_in(req)
+        if not who:
             return httpx.Response(401, text="login", request=req)
+        if req.method == "GET":
+            return httpx.Response(200, json=PROFILE, request=req)
         try:
             body = json.loads(req.content or b"{}")
         except ValueError:
             return httpx.Response(400, json={"error": "bad json"}, request=req)
         PROFILE.update(body)
         return httpx.Response(200, json={"saved": True}, request=req)
+    if path == "/api/profile-strict":
+        # schema-whitelisted counterpart: unknown fields are ignored entirely
+        if not logged_in(req):
+            return httpx.Response(401, text="login", request=req)
+        if req.method == "GET":
+            return httpx.Response(200, json={"name": "acct"}, request=req)
+        return httpx.Response(200, json={"saved": "name"}, request=req)
     if path == "/redirect":
         return httpx.Response(302, request=req,
                               headers=[("Location", params.get("url", "/"))])

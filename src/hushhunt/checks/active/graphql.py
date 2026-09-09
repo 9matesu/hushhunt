@@ -7,7 +7,7 @@ from .. import register, register_repro
 INTROSPECTION = json.dumps({"query": "{ __schema { queryType { name } } }"})
 
 
-@register("graphql_probe", "WSTG-INPV-06", "low")
+@register("graphql_probe", "WSTG-APIT-99", "low")
 def check_graphql(ctx) -> list[dict]:
     """ONE POST under a probe grant to an endpoint the CRAWLER discovered as
     GraphQL-ish (js routes matching /graphql etc. — never guessed paths).

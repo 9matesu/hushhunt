@@ -24,7 +24,7 @@ def _chains(js: str) -> list[tuple[str, str]]:
     return found
 
 
-@register("xss_dom", "WSTG-INPV-01", "low")
+@register("xss_dom", "WSTG-CLNT-01", "low")
 def check_dom_xss(ctx) -> list[dict]:
     """ZERO network: pure static taint over JS bodies the v1 miner already
     fetched (ctx.fetched_js = [(url, body)]). Context signal — the LLM triager
