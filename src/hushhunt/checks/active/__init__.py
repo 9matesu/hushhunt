@@ -14,4 +14,5 @@ ACTIVE_MODULES: dict[str, str] = {
     "graphql_probe": "probe",
     "blind_oast": "deep",
     "mass_assign": "deep",
+    "cmd_inject": "deep",
 }

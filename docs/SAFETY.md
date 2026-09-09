@@ -67,6 +67,11 @@ Active-module rules beyond v1's:
 - Session modules use ONLY throwaway accounts the operator registered
   (passwords in env vars only); IDOR reads only objects account A itself
   observed; mass-assign writes one field to our own profile and ROLLS BACK.
+- Command injection (RCE) is proven OUT-OF-BAND ONLY: the injected command
+  is an inert `curl` to our OAST canary — no destructive tokens are ever
+  emitted (test-pinned), and with OAST disabled the module fires ZERO
+  requests. RCE requires a `deep` grant + `high` cap; the LLM cannot
+  trigger it.
 - Deep findings verify by RE-RUNNING a PoC script in an AST sandbox
   (no imports except hushhunt, no file/socket/exec builtins, 12-request cap)
   — the exploit execution IS the deterministic positive gate.

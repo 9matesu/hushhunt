@@ -41,7 +41,8 @@ corpus). The tool never rewrites its own rules silently.
 ## v2 — active pentesting modules (grant-gated)
 
 The passive funnel is the base; active WSTG modules (XSS/SQLi/SSTI/IDOR/JWT/
-redirect/GraphQL/blind-OAST/mass-assign) run ONLY when ALL THREE gates pass:
+redirect/GraphQL/blind-OAST/command-injection (RCE)/mass-assign) run ONLY
+when ALL THREE gates pass:
 
 1. **risk_cap** per program: `off` (nothing, not even passive) < `passive`
    (v1 checks only) < `low` (adds low-risk probe modules: redirect-chain,

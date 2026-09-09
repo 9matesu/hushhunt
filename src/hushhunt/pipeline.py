@@ -25,6 +25,7 @@ import hushhunt.checks.active.jwtchecks  # noqa: F401
 import hushhunt.checks.active.redirect   # noqa: F401
 import hushhunt.checks.active.graphql    # noqa: F401
 import hushhunt.checks.active.blind      # noqa: F401
+import hushhunt.checks.active.cmdinject  # noqa: F401
 import hushhunt.checks.active.massassign  # noqa: F401
 from .checks.active import ACTIVE_MODULES
 from .crawl import crawl
@@ -243,6 +244,13 @@ def active_probe(cfg, conn, program: dict, transport=None,
         ctx.oast = oast or OastClient(cfg)
         try:
             for sig in CHECK_CATALOG["blind_oast"].fn(ctx):
+                n += _store_signals(conn, program, hc, first[0], [sig])
+        except Exception:
+            pass
+    if "cmd_inject" in names:
+        ctx.oast = oast or OastClient(cfg)
+        try:
+            for sig in CHECK_CATALOG["cmd_inject"].fn(ctx):
                 n += _store_signals(conn, program, hc, first[0], [sig])
         except Exception:
             pass

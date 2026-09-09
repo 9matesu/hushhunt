@@ -18,7 +18,8 @@ LIVE_CONFIRM_REQUIRED = {"exposed_files", "cors_misconfig", "js_secret_leak",
 # Deep findings cannot be replayed from captured evidence alone (they need
 # live sessions/OAST) => they must carry an EXECUTED poc_script to verify.
 POC_REQUIRED = {"idor", "mass_assign", "jwt_misuse", "graphql_probe",
-                "blind_oast", "sqli_boolean", "xss_dom", "js_endpoints"}
+                "blind_oast", "sqli_boolean", "xss_dom", "js_endpoints",
+                "cmd_inject"}
 
 _STATUS_RE = re.compile(r"^HTTP/1\.1 (\d+)")
 _HEADER_RE = re.compile(r"^([A-Za-z0-9\-]+):\s*(.*)$")
@@ -66,8 +67,8 @@ def _identity_key(check_id: str, payload: dict) -> tuple:
         return (payload.get("issue"),)
     if check_id == "js_secret_leak":
         return (payload.get("redacted", "")[:10],)
-    if check_id in ("blind_oast",):
-        return (payload.get("param"),)
+    if check_id in ("blind_oast", "cmd_inject"):
+        return (payload.get("param"), payload.get("syntax", payload.get("param")))
     if check_id in ("xss_reflected", "ssti", "sqli_error", "sqli_boolean",
                     "open_redirect_chain", "mass_assign", "idor"):
         return (payload.get("param") or payload.get("field")

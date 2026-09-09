@@ -62,7 +62,8 @@ def validate(pt: PlannedTest, program: dict, conn, now=None,
 _RISKS = {"xss_reflected": "medium", "xss_dom": "low", "sqli_error": "medium",
           "sqli_boolean": "high", "ssti": "medium", "idor": "high",
           "jwt_misuse": "medium", "open_redirect_chain": "low",
-          "graphql_probe": "low", "blind_oast": "high", "mass_assign": "high"}
+          "graphql_probe": "low", "blind_oast": "high", "mass_assign": "high",
+          "cmd_inject": "high"}
 
 
 def _module_risk(module: str) -> str:
