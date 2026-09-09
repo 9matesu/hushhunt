@@ -26,6 +26,9 @@ class Ctx:
     oast=None                                       # OastClient|FakeOast (v2 blind)
     sessions=None                                   # SessionBroker (v2 authed)
     post: Callable | None = None                    # HardenedClient.post (grant-gated)
+    session_a=None                                  # httpx.Client acct A (idor)
+    session_b=None                                  # httpx.Client acct B (idor)
+    owned_urls: list = field(default_factory=list)  # [(url, fingerprint)] seen by A
 
 
 CHECK_CATALOG: dict[str, CheckDef] = {}
