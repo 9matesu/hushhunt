@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "id": "101",
+      "type": "program",
+      "attributes": {
+        "name": "SmallCo Vulnerability Disclosure Program",
+        "url": "https://hackerone.com/smallco",
+        "created_at": "2025-03-01T10:00:00.000Z",
+        "policy": "Scope\n*.smallco.io\napp.smallco.io\n\nOut of scope\nblog.smallco.io\nstaging.smallco.io",
+        "average_bounty_resolution_time": 48,
+        "policy_information": {"safe_harbor": "all"},
+        "program_bounties": [
+          {"asset_type": "WILDCARD", "identifier": "*.smallco.io", "max_bounty": 500, "bounty": 1},
+          {"asset_type": "URL", "identifier": "https://app.smallco.io", "max_bounty": 300, "bounty": 2},
+          {"asset_type": "OTHER", "identifier": "print materials", "max_bounty": 50, "bounty": 3}
+        ]
+      }
+    },
+    {
+      "id": "102",
+      "type": "program",
+      "attributes": {
+        "name": "BigCorp",
+        "url": "https://hackerone.com/bigcorp",
+        "created_at": "2019-01-01T00:00:00.000Z",
+        "policy": "all corporate domains",
+        "average_bounty_resolution_time": 240,
+        "policy_information": {"safe_harbor": "none"},
+        "program_bounties": [
+          {"asset_type": "DOMAIN", "identifier": "bigcorp.com", "max_bounty": 2500, "bounty": 4}
+        ]
+      }
+    }
+  ],
+  "links": {"next": null}
+}
