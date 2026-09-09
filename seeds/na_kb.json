@@ -1,0 +1,11 @@
+[{"id": "NA-001", "pattern": "clickjacking_no_ui", "check_ids": ["passive_headers"], "regex": "missing_clickjacking_protection", "why_rejected": "no demonstrable sensitive state-changing UI behind the frameable page"},
+ {"id": "NA-002", "pattern": "missing_csp_report_only", "check_ids": ["passive_headers"], "regex": "missing_csp", "why_rejected": "missing CSP alone is consistently closed as informative on HackerOne"},
+ {"id": "NA-003", "pattern": "cookie_flags_alone", "check_ids": ["passive_headers"], "regex": "cookie_no_httponly|cookie_no_secure|cookie_no_samesite", "why_rejected": "cookie attribute findings without an XSS/session-fixation impact chain are NA"},
+ {"id": "NA-004", "pattern": "version_disclosure_only", "check_ids": ["version_disclosure"], "regex": ".*", "why_rejected": "banner-level version disclosure with no demonstrated exploit path"},
+ {"id": "NA-005", "pattern": "waf_banner_trivia", "check_ids": ["waf_detect"], "regex": ".*", "why_rejected": "WAF presence/absence is context, never a finding"},
+ {"id": "NA-006", "pattern": "sourcemap_no_secrets", "check_ids": ["js_endpoints"], "regex": ".*", "why_rejected": "source maps / route enumeration without proven impact is informative"},
+ {"id": "NA-007", "pattern": "self_xss_combo", "check_ids": [], "regex": "self[- ]xss", "why_rejected": "self-XSS and CSRF-on-self-XSS chains are NA"},
+ {"id": "NA-008", "pattern": "open_redirect_no_flow", "check_ids": [], "regex": "open_redirect(?!.*login)", "why_rejected": "open redirect without a concrete auth flow or known whitelisted chain"},
+ {"id": "NA-009", "pattern": "dns_txt_trivia", "check_ids": [], "regex": "dkim|spf|dmarc record", "why_rejected": "DNS/TXT record configuration trivia"},
+ {"id": "NA-010", "pattern": "soft404_anything", "check_ids": ["exposed_files"], "regex": "soft.?404", "why_rejected": "catch-all pages returning 200 for nonexistent paths"},
+ {"id": "NA-011", "pattern": "hsts_preload_nit", "check_ids": ["passive_headers"], "regex": "missing_hsts", "why_rejected": "missing HSTS on endpoints without authenticated state is routinely informative-only"}]

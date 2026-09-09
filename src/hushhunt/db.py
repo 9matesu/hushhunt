@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS signals(
   UNIQUE(asset, check_id, payload_json));
 CREATE TABLE IF NOT EXISTS findings(
   id INTEGER PRIMARY KEY AUTOINCREMENT, signal_id INTEGER, stage TEXT,
-  confidence REAL, report_path TEXT, outcome TEXT, updated_at TEXT);
+  confidence REAL, report_path TEXT, outcome TEXT, detail_json TEXT,
+  updated_at TEXT);
 CREATE TABLE IF NOT EXISTS weights(
   check_id TEXT PRIMARY KEY, precision_ewma REAL, n INTEGER, updated_at TEXT);
 CREATE TABLE IF NOT EXISTS playbook(
