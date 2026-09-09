@@ -1,0 +1,29 @@
+**Title:** {{ title }}
+
+**Severity:** {{ severity }} ({{ cvss }})
+
+## Summary
+{{ summary }}
+
+## Impact
+{{ impact }}
+
+## Steps To Reproduce
+{% for step in steps %}{{ loop.index }}. {{ step }}
+{% endfor %}
+
+## Proof of Concept
+{% for ev in evidence %}```http
+{{ ev }}
+```
+{% endfor %}
+## Recommended Remediation
+{{ remediation }}
+
+## References
+{% for r in refs %}- {{ r }}
+{% endfor %}
+
+---
+Submitted by an evidence-first research process. Passive methodology; no data
+accessed, no disruption caused. Redacted secrets available on request.
