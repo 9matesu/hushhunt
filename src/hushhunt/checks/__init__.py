@@ -29,6 +29,8 @@ class Ctx:
     session_a=None                                  # httpx.Client acct A (idor)
     session_b=None                                  # httpx.Client acct B (idor)
     owned_urls: list = field(default_factory=list)  # [(url, fingerprint)] seen by A
+    own_jwt=None                                    # tester's own JWT (jwt checks)
+    jwt_api_url=None                                # endpoint to replay forged copies
 
 
 CHECK_CATALOG: dict[str, CheckDef] = {}

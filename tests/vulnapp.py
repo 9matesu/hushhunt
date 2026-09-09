@@ -14,6 +14,7 @@ DO NOT ever point this at a real program. Emulates per path:
 """
 from __future__ import annotations
 
+import base64
 import json
 import re
 
@@ -32,6 +33,30 @@ def logged_in(req: httpx.Request) -> str | None:
     if not m:
         return None
     return "acct_" + m.group(1)
+
+
+def _b64d(seg: str) -> bytes:
+    return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+
+
+def _jwt_parts(tok: str):
+    try:
+        h, p, s = tok.split(".")
+        return json.loads(_b64d(h)), json.loads(_b64d(p)), s
+    except Exception:
+        return None
+
+
+def _hmac_b64(hdr, claims, secret: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    body = (base64.urlsafe_b64encode(json.dumps(hdr, separators=(",", ":")).encode())
+            .rstrip(b"=").decode() + "." +
+            base64.urlsafe_b64encode(json.dumps(claims, separators=(",", ":")).encode())
+            .rstrip(b"=").decode())
+    return base64.urlsafe_b64encode(
+        _hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
+    ).rstrip(b"=").decode()
 
 
 def handler(req: httpx.Request) -> httpx.Response:
@@ -83,6 +108,21 @@ def handler(req: httpx.Request) -> httpx.Response:
         # VULNERABLE: any session reads any order
         return httpx.Response(200, json={"order": name, "owner": owner},
                               request=req)
+    if path == "/api/whoami":
+        auth = req.headers.get("authorization", "")
+        tok = auth.removeprefix("Bearer ").strip()
+        data = _jwt_parts(tok)
+        if data:
+            hdr, claims, sig = data
+            # VULNERABLE: accepts alg:none OR weak shared secret 'hush'
+            if hdr.get("alg") == "none":
+                return httpx.Response(200, json={"whoami": claims.get("sub")},
+                                      request=req)
+            if (hdr.get("alg") == "HS256"
+                    and sig == _hmac_b64(hdr, claims, "hush")):
+                return httpx.Response(200, json={"whoami": claims.get("sub")},
+                                      request=req)
+        return httpx.Response(401, json={"error": "bad token"}, request=req)
     if path == "/api/profile":
         if not logged_in(req):
             return httpx.Response(401, text="login", request=req)
@@ -152,6 +192,13 @@ def safe_handler(req: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"order": name, "owner": owner}, request=req)
     if path == "/login":
         return handler(req)          # identical login surface
+    if path == "/api/whoami":
+        # SAFE: only the server-issued exact token validates (no alg:none,
+        # no weak re-sign). Signature check in real life; here: equality.
+        tok = req.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if tok == JWT:
+            return httpx.Response(200, json={"whoami": "acct_a"}, request=req)
+        return httpx.Response(401, json={"error": "bad token"}, request=req)
     if path == "/redirect":
         return httpx.Response(302, request=req, headers=[("Location", "/")])
     if path == "/graphql":
