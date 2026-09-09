@@ -11,7 +11,8 @@ from .db import count_requests_today, log_request
 from .evidence import save_capture
 from .scope import url_in_scope
 
-BANNED_METHODS = {"post", "put", "patch", "delete", "options"}
+BANNED_METHODS = {"put", "patch", "delete", "options"}   # POST exists but is
+# grant-gated via post(); the others never do.
 
 
 class BudgetExceeded(Exception):
@@ -46,21 +47,26 @@ class HardenedClient:
             follow_redirects=False,
             verify=True)
 
-    def _check(self, url: str) -> None:
+    def _check(self, url: str, kind: str = "passive") -> None:
         includes = self.program["includes"]
         excludes = self.program["excludes"]
         if not url_in_scope(url, includes, excludes):
             raise OutOfScope(url)
-        min_gap = 1.0 / max(self.cfg["limits.rate_per_second_per_target"], 1)
+        rate = (self.cfg["limits.rate_per_second_per_target"] if kind == "passive"
+                else self.cfg["limits.active.burst_rate_per_second"])
+        min_gap = 1.0 / max(rate, 1)
         wait = min_gap - (time.time() - self._last)
         if wait > 0:
             time.sleep(wait)
         host = httpx.URL(url).host
         if self._per_host.get(host, 0) >= self.cfg["limits.max_requests_per_asset"]:
             raise BudgetExceeded(f"per-asset cap hit for {host}")
-        if count_requests_today(self.conn, self.program["id"]) >= \
-                self.cfg["limits.daily_requests_per_program"]:
-            raise BudgetExceeded(f"daily cap hit for {self.program['name']}")
+        if kind == "active":
+            cap = self.cfg["limits.active.daily_requests_per_program"]
+        else:
+            cap = self.cfg["limits.daily_requests_per_program"]
+        if count_requests_today(self.conn, self.program["id"], kind=kind) >= cap:
+            raise BudgetExceeded(f"{kind} daily cap hit for {self.program['name']}")
 
     def get(self, url: str, headers: dict | None = None,
             evidence_tag: str = "probe") -> httpx.Response:
@@ -90,6 +96,38 @@ class HardenedClient:
         log_request(self.conn, self.program["id"],
                     datetime.now(timezone.utc).isoformat(), url, "GET",
                     resp.status_code, ms)
+        return resp
+
+    def post(self, url: str, *, data: dict | None = None,
+             json_body: dict | None = None, headers: dict | None = None,
+             grant_id: int) -> httpx.Response:
+        """MUTATING VERB — triple-gated: (1) scope+rate+budget via _check,
+        (2) a valid, unexpired, in-headroom grant whose module is fetched from
+        the DB (a caller can't forge it: we look it up by id and re-verify),
+        (3) separate active-kind budget. Evidence capture identical to get.
+        Sessions/cookies are NOT attached here: only module check code that
+        earned the grant passes explicit token params."""
+        from .db import get_grant_module
+        from .grants import active_grant
+        module = get_grant_module(self.conn, grant_id)
+        if module is None or active_grant(self.conn, self.program["id"],
+                                          module) is None:
+            raise PermissionError(
+                f"no valid grant for module {module!r} (grant_id={grant_id})")
+        self._check(url, kind="active")
+        self._last = time.time()
+        host = httpx.URL(url).host
+        self._per_host[host] = self._per_host.get(host, 0) + 1
+        t0 = time.time()
+        resp = self._client.post(url, data=data, json=json_body,
+                                 headers=headers or {})
+        ms = int((time.time() - t0) * 1000)
+        ev = self._evidence_dir()
+        save_capture(ev, resp.request, resp, None)
+        self.evidence_by_url[url] = str(ev)
+        log_request(self.conn, self.program["id"],
+                    datetime.now(timezone.utc).isoformat(), url, "POST",
+                    resp.status_code, ms, kind="active")
         return resp
 
     def _evidence_dir(self) -> Path:

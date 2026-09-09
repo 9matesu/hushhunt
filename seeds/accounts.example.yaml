@@ -1,0 +1,13 @@
+# Throwaway accounts the operator created for testing ONLY. NEVER real user
+# credentials. Passwords are referenced by env var name, never stored here.
+h1:101:
+  - id: acct_a
+    user: hush.a@example.com
+    password_env: HH_ACCT_H1101_A
+    login_url: https://app.smallco.io/login
+    csrf_field: authenticity_token
+  - id: acct_b
+    user: hush.b@example.com
+    password_env: HH_ACCT_H1101_B
+    login_url: https://app.smallco.io/login
+    csrf_field: authenticity_token

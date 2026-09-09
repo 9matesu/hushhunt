@@ -9,15 +9,30 @@ MAX_BODY = 64 * 1024
 
 def _req_text(req: httpx.Request) -> str:
     lines = [f"{req.method} {req.url} HTTP/1.1"]
-    lines += [f"{k}: {v}" for k, v in req.headers.items()]
-    return "\n".join(lines) + "\n"
+    for k, v in req.headers.items():
+        if k.lower() in ("cookie", "authorization"):
+            v = v[:12] + "...[redacted]"    # evidence must not carry live creds
+        lines.append(f"{k}: {v}")
+    text = "\n".join(lines) + "\n"
+    body = req.content.decode("utf-8", errors="replace") if req.content else ""
+    if body:
+        text += "\n" + body[:MAX_BODY]
+        if len(body) > MAX_BODY:
+            text += "\n...[truncated]"
+    return text
 
 
 def _resp_text(resp: httpx.Response | None, err: Exception | None) -> str:
     if resp is None:
         return f"ERROR: {type(err).__name__}: {err}\n"
     lines = [f"HTTP/1.1 {resp.status_code}"]
-    lines += [f"{k}: {v}" for k, v in resp.headers.items()]
+    for k, v in resp.headers.items():
+        if k.lower() == "set-cookie":
+            # redact the VALUE only — attributes (HttpOnly/Secure/SameSite)
+            # must survive so passive_headers replay still works
+            first, sep, rest = v.partition(";")
+            v = first.split("=", 1)[0] + "=...[redacted]" + (sep + rest if sep else "")
+        lines.append(f"{k}: {v}")
     body = resp.text[:MAX_BODY]
     if len(resp.text) > MAX_BODY:
         body += "\n...[truncated]"

@@ -95,7 +95,14 @@ def test_every_request_logged_with_evidence(tmp_path):
     assert "200" in body and "hello" in body
 
 
-def test_method_whitelist_get_head_only(tmp_path):
+def test_method_whitelist(tmp_path):
+    """v1 rule: PUT/PATCH/DELETE/OPTIONS never exist. v2: POST exists but ONLY
+    as the grant-gated hc.post(grant_id=...) — unauthenticated callers fail."""
     hc, _ = _client(tmp_path, lambda r: httpx.Response(200))
-    with pytest.raises((ValueError, AttributeError)):
-        hc.post("https://app.smallco.io/x")   # mutating verbs simply don't exist
+    for verb in ("put", "patch", "delete", "options"):
+        with pytest.raises(AttributeError):
+            getattr(hc, verb)("https://app.smallco.io/x")
+    with pytest.raises(TypeError):        # post requires grant_id keyword
+        hc.post("https://app.smallco.io/x")
+    with pytest.raises(PermissionError):  # grant id 99 doesn't exist
+        hc.post("https://app.smallco.io/x", data={}, grant_id=99)
