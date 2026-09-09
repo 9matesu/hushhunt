@@ -32,9 +32,34 @@ CREATE TABLE IF NOT EXISTS playbook(
   id INTEGER PRIMARY KEY CHECK(id=1), text TEXT, version INTEGER, updated_at TEXT);
 """
 
+# v2 migrations, numbered via PRAGMA user_version (starts at 0 on fresh DBs).
+MIGRATIONS = [
+    """CREATE TABLE IF NOT EXISTS grants(
+         id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT, module TEXT,
+         scope TEXT, max_requests INTEGER, expires_at TEXT, signed TEXT);""",
+    "ALTER TABLE request_log ADD COLUMN kind TEXT DEFAULT 'passive';",
+    "ALTER TABLE programs ADD COLUMN risk_cap TEXT DEFAULT 'passive';",
+    """CREATE TABLE IF NOT EXISTS poc_scripts(
+         id INTEGER PRIMARY KEY AUTOINCREMENT, finding_id INTEGER, code TEXT,
+         language TEXT DEFAULT 'python', ok_last_run INTEGER, ran_at TEXT);""",
+    """CREATE TABLE IF NOT EXISTS demoted(
+         module TEXT PRIMARY KEY, until TEXT, reason TEXT);""",
+    """CREATE TABLE IF NOT EXISTS params_seen(
+         program_id TEXT, url TEXT, param TEXT, source TEXT,
+         UNIQUE(program_id, url, param));""",
+]
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+
+def migrate(conn: sqlite3.Connection) -> None:
+    v = conn.execute("PRAGMA user_version").fetchone()[0]
+    while v < len(MIGRATIONS):
+        try:
+            conn.executescript(MIGRATIONS[v])
+        except sqlite3.OperationalError:   # e.g. duplicate ADD COLUMN on racy open
+            pass
+        v += 1
+        conn.execute(f"PRAGMA user_version={v}")
+        conn.commit()
 
 
 def open_db(path: str | Path) -> sqlite3.Connection:
@@ -42,7 +67,12 @@ def open_db(path: str | Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA_SQL)
+    migrate(conn)
     return conn
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def upsert_program(conn: sqlite3.Connection, p: dict) -> None:
@@ -70,19 +100,30 @@ def add_asset(conn: sqlite3.Connection, program_id: str, asset_type: str,
 
 
 def log_request(conn: sqlite3.Connection, program_id: str, ts: str, url: str,
-                method: str, status: int, ms: int) -> None:
+                method: str, status: int, ms: int, kind: str = "passive") -> None:
     conn.execute(
-        "INSERT INTO request_log(program_id,ts,url,method,status,ms) VALUES(?,?,?,?,?,?)",
-        (program_id, ts, url, method, status, ms))
+        "INSERT INTO request_log(program_id,ts,url,method,status,ms,kind) VALUES(?,?,?,?,?,?,?)",
+        (program_id, ts, url, method, status, ms, kind))
     conn.commit()
 
 
-def count_requests_today(conn: sqlite3.Connection, program_id: str) -> int:
+def count_requests_today(conn: sqlite3.Connection, program_id: str,
+                         kind: str | None = None) -> int:
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    row = conn.execute(
-        "SELECT COUNT(*) c FROM request_log WHERE program_id=? AND ts LIKE ?",
-        (program_id, day + "%")).fetchone()
+    if kind is None:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM request_log WHERE program_id=? AND ts LIKE ?",
+            (program_id, day + "%")).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) c FROM request_log WHERE program_id=? AND kind=? AND ts LIKE ?",
+            (program_id, kind, day + "%")).fetchone()
     return row["c"]
+
+
+def get_grant_module(conn: sqlite3.Connection, grant_id: int) -> str | None:
+    row = conn.execute("SELECT module FROM grants WHERE id=?", (grant_id,)).fetchone()
+    return row["module"] if row else None
 
 
 def add_signal(conn: sqlite3.Connection, program_id: str, asset: str, check_id: str,
