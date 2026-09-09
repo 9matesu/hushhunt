@@ -71,18 +71,20 @@ def crawl(cfg, conn, program: dict, transport=None,
         if "html" not in ct and "text" not in ct and "xml" not in ct:
             continue
         base = urlparse(norm)
-        for m in PARAM_RE.findall("?" + (base.query or "")):
+        for key, vals in parse_qs(base.query, keep_blank_values=True).items():
             conn.execute(
-                "INSERT OR IGNORE INTO params_seen(program_id,url,param,source) "
-                "VALUES(?,?,?,?)", (program["id"], base.path, m, "query"))
+                "INSERT OR IGNORE INTO params_seen(program_id,url,param,source,"
+                "sample_url,sample_value) VALUES(?,?,?,?,?,?)",
+                (program["id"], base.path, key, "query", norm, vals[0]))
             params_n += 1
         for form in FORM_RE.finditer(r.text):
             action = urljoin(norm, form.group(1))
             for name in INPUT_RE.findall(form.group(2)):
                 conn.execute(
-                    "INSERT OR IGNORE INTO params_seen(program_id,url,param,source) "
-                    "VALUES(?,?,?,?)", (program["id"], urlparse(action).path,
-                                        name, "form"))
+                    "INSERT OR IGNORE INTO params_seen(program_id,url,param,"
+                    "source,sample_url,sample_value) VALUES(?,?,?,?,?,?)",
+                    (program["id"], urlparse(action).path, name, "form",
+                     action, ""))
                 params_n += 1
         for href in LINK_RE.findall(r.text):
             child = urljoin(norm, href)

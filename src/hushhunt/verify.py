@@ -12,7 +12,13 @@ from .checks import Ctx
 # through the HardenedClient is mandatory before anything is called a
 # positive. Replaying stale evidence alone would let a since-fixed endpoint
 # slip into a report (false positive => account reputation damage).
-LIVE_CONFIRM_REQUIRED = {"exposed_files", "cors_misconfig", "js_secret_leak"}
+LIVE_CONFIRM_REQUIRED = {"exposed_files", "cors_misconfig", "js_secret_leak",
+                         "xss_reflected", "ssti", "sqli_error",
+                         "open_redirect_chain"}
+# Deep findings cannot be replayed from captured evidence alone (they need
+# live sessions/OAST) => they must carry an EXECUTED poc_script to verify.
+POC_REQUIRED = {"idor", "mass_assign", "jwt_misuse", "graphql_probe",
+                "blind_oast", "sqli_boolean", "xss_dom", "js_endpoints"}
 
 _STATUS_RE = re.compile(r"^HTTP/1\.1 (\d+)")
 _HEADER_RE = re.compile(r"^([A-Za-z0-9\-]+):\s*(.*)$")
@@ -52,14 +58,22 @@ def _load_capture(evidence_dir: str) -> httpx.Response | None:
 
 def _identity_key(check_id: str, payload: dict) -> tuple:
     """What must be identical between original signal and reproduction.
-    For live checks only the structural part (path/issue/kind) — server
-    content may have changed without invalidating the vulnerability."""
+    For live/active checks only the structural part (path/issue/kind/param) —
+    nonces and previews change every run without invalidating the vuln."""
     if check_id == "exposed_files":
         return (payload.get("path"),)
     if check_id == "cors_misconfig":
         return (payload.get("issue"),)
     if check_id == "js_secret_leak":
-        return (payload.get("kind"), payload.get("redacted", "")[:8])
+        return (payload.get("redacted", "")[:10],)
+    if check_id in ("blind_oast",):
+        return (payload.get("param"),)
+    if check_id in ("xss_reflected", "ssti", "sqli_error", "sqli_boolean",
+                    "open_redirect_chain", "mass_assign", "idor"):
+        return (payload.get("param") or payload.get("field")
+                or payload.get("victim"),)
+    if check_id == "graphql_probe":
+        return (payload.get("issue"),)
     return (json.dumps(payload, sort_keys=True),)
 
 
@@ -72,9 +86,17 @@ def _reproduce(signal: dict, replay_resp: httpx.Response, live, catalog) -> bool
             je = catalog.get("js_endpoints")
             if je and je.fn:
                 je.fn(ctx)  # populates ctx.fetched_js from LIVE script bodies
-        regen = check.fn(ctx)
+        if signal["check_id"] in ("xss_reflected", "ssti", "sqli_error",
+                                  "open_redirect_chain"):
+            # live re-probe: re-run the check on the ORIGINAL asset surface
+            ctx.params = [(want.get("asset") or str(replay_resp.request.url),
+                           want["param"], "")]
+            regen = check.fn(ctx)
+        else:
+            regen = check.fn(ctx)
     else:
-        regen = check.fn(Ctx(resp=replay_resp, fetch=None))
+        ctx = Ctx(resp=replay_resp, fetch=None)
+        regen = check.fn(ctx)
     return any(r.get("check_id") == signal["check_id"] and
                _identity_key(signal["check_id"], r.get("payload", {})) ==
                _identity_key(signal["check_id"], want)
@@ -86,30 +108,51 @@ def make_live_replay(signal: dict, fetch):
     original signal pass through to the live client; every other candidate
     path is answered with a synthetic 404 (zero traffic). Keeps a verify pass
     to 1 request for exposed_files (the signaling path only), 1 for CORS,
-    <=4 for JS."""
+    <=4 for JS, <=4 GETs on the same path family for active probes."""
     want_path = None
     if signal["check_id"] == "exposed_files":
         want_path = json.loads(signal["payload_json"]).get("path")
+    elif signal["check_id"] in LIVE_CONFIRM_REQUIRED:
+        from urllib.parse import urlparse
+        want_path = urlparse(signal["asset"]).path
 
     def live(url, headers=None):
-        if want_path and not str(url).endswith(want_path):
-            return httpx.Response(404, text="not refetched",
-                                  request=httpx.Request("GET", url))
+        if want_path:
+            from urllib.parse import urlparse
+            if urlparse(str(url)).path != want_path:
+                return httpx.Response(404, text="not refetched",
+                                      request=httpx.Request("GET", url))
         return fetch(url, headers=headers)
     return live
 
 
+def has_ok_poc(conn, finding_id: int) -> bool:
+    if conn is None:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM poc_scripts WHERE finding_id=? AND ok_last_run=1 LIMIT 1",
+        (finding_id,)).fetchone()
+    return row is not None
+
+
 def verify_finding(conn, cfg, catalog, finding: dict, signals: list[dict],
-                   live_fetch=None) -> tuple[str, str | None]:
-    """Positive-only gate — no LLM. 'verified' requires EVERY backing signal to
-    reproduce: deterministic replay over stored evidence for passive checks,
-    plus a fresh budgeted re-fetch for volatile ones. Any miss => 'dropped'
-    with a machine-readable outcome that feeds the learning loop."""
+                   live_fetch=None, live_recheck=None) -> tuple[str, str | None]:
+    """Positive-only gate — no LLM. Passive/live-GET signals must reproduce
+    from stored evidence (+1 budgeted re-fetch). Session/OAST signals can't
+    be replayed from captures: they verify via an executed PoC script OR a
+    live re-check callback (the check itself re-run with fresh sessions).
+    Any miss => 'dropped' with a machine-readable outcome for learning."""
     if (finding.get("confidence") or 0) < cfg["triage.min_confidence"]:
         return "dropped", "confidence_below_min"
     for s in signals:
         if s["check_id"] not in catalog or catalog[s["check_id"]].fn is None:
             return "dropped", f"unknown_check:{s['check_id']}"
+        if s["check_id"] in POC_REQUIRED:
+            if has_ok_poc(conn, finding["id"]):
+                continue
+            if live_recheck and live_recheck(s):
+                continue
+            return "dropped", "poc_not_executed"
         replayed = _load_capture(s["evidence_dir"]) if s["evidence_dir"] else None
         if replayed is None:
             return "dropped", "missing_evidence"

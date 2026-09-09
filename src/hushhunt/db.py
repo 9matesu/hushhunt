@@ -47,6 +47,8 @@ MIGRATIONS = [
     """CREATE TABLE IF NOT EXISTS params_seen(
          program_id TEXT, url TEXT, param TEXT, source TEXT,
          UNIQUE(program_id, url, param));""",
+    "ALTER TABLE params_seen ADD COLUMN sample_url TEXT;",
+    "ALTER TABLE params_seen ADD COLUMN sample_value TEXT;",
 ]
 
 
