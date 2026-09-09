@@ -132,7 +132,8 @@ def safe_handler(req: httpx.Request) -> httpx.Response:
     hdrs: list[tuple[str, str]] = [("Content-Type", "text/html")]
     if path in ("/search", "/render"):
         v = (params.get("q") or params.get("tpl") or "")
-        v = v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        v = (v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+              .replace('"', "&quot;").replace("'", "&#39;"))
         return httpx.Response(200, text=f"<h1>safe: {v}</h1>", headers=hdrs,
                               request=req)
     if path == "/item":

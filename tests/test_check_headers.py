@@ -12,10 +12,11 @@ def _ctx(**kw):
 
 
 def test_catalog_entries_have_wstg_mapping():
-    assert len(CHECK_CATALOG) >= 2
+    import hushhunt.checks.active.xss  # noqa: F401  (active modules also registered)
+    assert len(CHECK_CATALOG) >= 7
     for c in CHECK_CATALOG.values():
         assert c.wstg and c.wstg.startswith("WSTG-"), c.id
-        assert c.risk in ("passive", "low")
+        assert c.risk in ("passive", "low", "medium", "high"), c.id
         assert c.fn is not None
 
 
