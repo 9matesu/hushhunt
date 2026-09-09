@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import httpx
@@ -20,6 +20,7 @@ class Ctx:
     resp: httpx.Response
     fetch: Callable | None = None   # HardenedClient.get for checks allowed 1 extra req
     asset_url: str | None = None
+    fetched_js: list = field(default_factory=list)  # bodies shared: fetch-once-evaluate-many
 
 
 CHECK_CATALOG: dict[str, CheckDef] = {}
