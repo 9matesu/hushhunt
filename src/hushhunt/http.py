@@ -134,11 +134,13 @@ class HardenedClient:
         # ':' is illegal in Windows path names (program ids look like 'h1:123')
         safe_pid = self.program["id"].replace(":", "_").replace("/", "-")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        # one directory PER REQUEST (counter guarantees uniqueness even when
-        # two requests share a wall-clock second) so evidence replay is exact
+        # globally unique: per-client counters collide across instances within
+        # the same second (probe + verify + poc clients) and evidence replay
+        # must be exact, so add a uuid suffix
+        import uuid
         self._seq = getattr(self, "_seq", 0) + 1
         return (Path(self.cfg.root) / "var/evidence" / safe_pid /
-                f"{stamp}-{self._seq:04d}")
+                f"{stamp}-{self._seq:04d}-{uuid.uuid4().hex[:6]}")
 
     # --- explicitly unsupported: mutating verbs never exist on this client ---
     def __getattr__(self, name):
