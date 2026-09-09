@@ -8,10 +8,10 @@ import yaml
 
 
 class Config:
-    def __init__(self, data: dict, root: Path):
+    def __init__(self, data: dict, root: str | Path):
         self._d = data
         self.root = Path(root)
-        load_dotenv(root / ".env")
+        load_dotenv(self.root / ".env")
 
     @classmethod
     def load(cls, root: str | Path = ".") -> "Config":

@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "id": "9001",
+      "name": "TinyShop VDP",
+      "url": "https://bugcrowd.com/tinyshop",
+      "max_reward": 800,
+      "is_safe_harbor": true,
+      "created_at": "2025-06-01T00:00:00.000Z",
+      "scopes": [
+        {"type": "DOMAIN_NAME", "identifier": "shop.tinyshop.dev"},
+        {"type": "WILDCARD", "identifier": "*.tinyshop.dev"},
+        {"type": "ANDROID_PACKAAGE_NAME", "identifier": "com.tinyshop.app"}
+      ]
+    },
+    {
+      "id": "9002",
+      "name": "MegaCorp",
+      "url": "https://bugcrowd.com/megacorp",
+      "max_reward": 5000,
+      "is_safe_harbor": false,
+      "created_at": "2018-01-01T00:00:00.000Z",
+      "scopes": [{"type": "DOMAIN_NAME", "identifier": "megacorp.com"}]
+    }
+  ],
+  "metadata": {"next": null}
+}
