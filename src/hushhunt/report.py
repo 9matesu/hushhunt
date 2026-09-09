@@ -69,7 +69,10 @@ def render_report(conn, cfg, finding: dict, signals: list[dict], catalog) -> str
     Writes out/reports/<pid>-<fid>-<slug>.md, flips stage to 'reported'.
     Idempotent on dedupe_key: re-rendering the same vuln returns the
     existing path (one bounty per vulnerability)."""
+    from .checks.cwe import CWE_MAP
     detail = json.loads(finding["detail_json"] or "{}")
+    first = signals[0] if signals else {}
+    cwe = detail.get("cwe") or CWE_MAP.get(first.get("check_id", ""), "")
     dedupe = _safe(detail.get("dedupe_key") or f"f{finding['id']}")
     out_dir = Path(cfg.root) / "out/reports"
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -68,6 +68,9 @@ def validate_ast(code: str) -> None:
     except SyntaxError as e:
         raise PoCContractError(f"poc syntax error: {e}") from e
     _Checker().visit(tree)
+    from .safecommands import is_destructive
+    if is_destructive(code):       # REDCELL-port belt: no destructive command
+        raise PoCContractError("poc text contains a destructive command")
 
 
 _SAFE_GLOBALS = {
