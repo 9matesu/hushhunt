@@ -10,6 +10,7 @@ limits:
   max_requests_per_asset: 12
   request_timeout_seconds: 10
   user_agent: "hushhunt/0.1 (hunter=matco; contact=<account email>; https://github.com/9matesu/hushhunt)"
+  proxy_url: ""                 # optional egress proxy, e.g. http://user:***@vps:3128
   active:                       # v2: active testing budgets (grant-gated on top)
     daily_requests_per_program: 400
     burst_rate_per_second: 2

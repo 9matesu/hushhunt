@@ -36,11 +36,17 @@ class HardenedClient:
         self.conn = conn
         self.cfg = cfg
         self.program = program
+        # egress proxy (REDCELL port): burn the VPS's reputation, not your
+        # home IP. NOTE: honored for REAL traffic only — when a MockTransport
+        # is injected (tests) httpx ignores `proxy`; that is by design.
+        self.proxy = (cfg.get("limits.proxy_url") or None) if transport is None \
+            else None
         self._last = 0.0
         self._per_host: dict[str, int] = {}
         self.evidence_by_url: dict[str, str] = {}   # url -> last evidence dir
         self._client = httpx.Client(
             transport=transport,   # injectable for offline tests only
+            proxy=self.proxy,
             timeout=cfg["limits.request_timeout_seconds"],
             headers={"User-Agent": cfg["limits.user_agent"],
                      "Accept": "*/*", "Accept-Language": "en"},
