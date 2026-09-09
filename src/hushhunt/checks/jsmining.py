@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-from . import Ctx, register
+from . import Ctx, register, register_repro
 
 MAX_SCRIPTS = 4  # hard request cap for js mining per asset
 SCRIPT_SRC_RE = re.compile(r"<script[^>]+src=[\"']([^\"']+)[\"']", re.I)
@@ -34,7 +34,7 @@ def _same_origin(base_url: str, src: str) -> str | None:
     return None  # third-party script: never fetched as target traffic
 
 
-@register("js_endpoints", "WSTG-INFO-01", "passive")
+@register("js_endpoints", "WSTG-INFO-01", "low")
 def check_js(ctx: Ctx) -> list[dict]:
     if ctx.fetch is None:
         return []
@@ -55,7 +55,7 @@ def check_js(ctx: Ctx) -> list[dict]:
         if r.status_code != 200:
             continue
         bodies_scanned += 1
-        ctx.fetched_js.append(r.text)          # share body with js_secret_leak (no re-fetch)
+        ctx.fetched_js.append((url, r.text))   # share (url,body) with js_secret_leak
         routes.update(ROUTE_RE.findall(r.text))
     if not routes:
         return []
@@ -66,18 +66,19 @@ def check_js(ctx: Ctx) -> list[dict]:
                                  "before ANY active testing (v2 gate)"}}]
 
 
-@register("js_secret_leak", "WSTG-INFO-01", "passive")
+@register("js_secret_leak", "WSTG-INFO-01", "low")
 def check_js_secrets(ctx: Ctx) -> list[dict]:
     """Shares the same fetch budget — implemented via js_endpoints' fetches:
     runs over the same ≤4 script bodies captured by a helper cache on ctx."""
     if ctx.fetch is None:
         return []
     # Scan the baseline HTML itself plus (budget-free) reuse of previously
-    # fetched bodies stored by check_js via ctx.notes.
-    texts = [ctx.resp.text] + getattr(ctx, "fetched_js", [])
+    # fetched bodies stored by check_js via ctx.fetched_js: (url, text) pairs.
+    texts: list[tuple[str, str]] = [(str(ctx.resp.request.url), ctx.resp.text)]
+    texts += list(getattr(ctx, "fetched_js", []) or [])
     out = []
     seen = set()
-    for t in texts:
+    for src_url, t in texts:
         for pat in SECRET_PATTERNS:
             for m in pat.findall(t):
                 value = m if isinstance(m, str) else m[0]
@@ -85,8 +86,16 @@ def check_js_secrets(ctx: Ctx) -> list[dict]:
                     continue
                 seen.add(value)
                 out.append({"check_id": "js_secret_leak",
-                            "asset": str(ctx.resp.request.url),
+                            "asset": src_url,   # evidence lives under THIS url
                             "severity_hint": "high",
                             "payload": {"redacted": _redact(value),
                                         "pattern": pat.pattern[:40]}})
     return out
+
+
+register_repro("js_secret_leak", lambda sig: [
+    f"Fetch {sig['asset']} (publicly served JavaScript, no auth required).",
+    "Search the response for credential-shaped strings; the redacted match "
+    "and its position are in the PoC capture. Full value withheld — available "
+    "to the triager on request; recommend immediate rotation.",
+])

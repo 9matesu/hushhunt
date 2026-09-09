@@ -30,13 +30,16 @@ class HardenedClient:
     is re-gated by the caller), full evidence capture of every request.
     """
 
-    def __init__(self, conn: sqlite3.Connection, cfg, program: dict):
+    def __init__(self, conn: sqlite3.Connection, cfg, program: dict,
+                 transport=None):
         self.conn = conn
         self.cfg = cfg
         self.program = program
         self._last = 0.0
         self._per_host: dict[str, int] = {}
+        self.evidence_by_url: dict[str, str] = {}   # url -> last evidence dir
         self._client = httpx.Client(
+            transport=transport,   # injectable for offline tests only
             timeout=cfg["limits.request_timeout_seconds"],
             headers={"User-Agent": cfg["limits.user_agent"],
                      "Accept": "*/*", "Accept-Language": "en"},
@@ -83,16 +86,21 @@ class HardenedClient:
             raise err
         ev = self._evidence_dir()
         save_capture(ev, resp.request, resp, None)
+        self.evidence_by_url[url] = str(ev)
         log_request(self.conn, self.program["id"],
                     datetime.now(timezone.utc).isoformat(), url, "GET",
                     resp.status_code, ms)
         return resp
 
     def _evidence_dir(self) -> Path:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         # ':' is illegal in Windows path names (program ids look like 'h1:123')
         safe_pid = self.program["id"].replace(":", "_").replace("/", "-")
-        return Path(self.cfg.root) / "var/evidence" / safe_pid / stamp
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        # one directory PER REQUEST (counter guarantees uniqueness even when
+        # two requests share a wall-clock second) so evidence replay is exact
+        self._seq = getattr(self, "_seq", 0) + 1
+        return (Path(self.cfg.root) / "var/evidence" / safe_pid /
+                f"{stamp}-{self._seq:04d}")
 
     # --- explicitly unsupported: mutating verbs never exist on this client ---
     def __getattr__(self, name):

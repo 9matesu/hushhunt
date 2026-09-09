@@ -15,7 +15,7 @@ def _origin(resp) -> str:
     return f"{req_url.scheme}://{req_url.host}"
 
 
-@register("exposed_files", "WSTG-CONF-03", "passive")
+@register("exposed_files", "WSTG-CONF-03", "low")
 def check_exposed_files(ctx: Ctx) -> list[dict]:
     """Uses ctx.fetch (HardenedClient.get) — scope + budget enforced upstream.
     Request count is provably <= len(ALLOWED_PATHS)."""

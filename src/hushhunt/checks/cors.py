@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from . import Ctx, register
+from . import Ctx, register, register_repro
 
 CANARY_ORIGIN = "https://hushhunt-canary.invalid"
 
@@ -30,3 +30,11 @@ def check_cors(ctx: Ctx) -> list[dict]:
     return [{"check_id": "cors_misconfig", "asset": str(r.request.url),
              "severity_hint": "medium",
              "payload": {"issue": hit, "acao": acao, "acac": acac}}]
+
+
+register_repro("cors_misconfig", lambda sig: [
+    f"GET {sig['asset']} with header 'Origin: {CANARY_ORIGIN}'",
+    "Observe the response's Access-Control-Allow-Origin echoing the arbitrary "
+    "origin verbatim (see PoC capture) — any website can read responses "
+    "cross-origin for logged-in victims.",
+])
