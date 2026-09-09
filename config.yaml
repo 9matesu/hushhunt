@@ -8,6 +8,14 @@ limits:
   max_requests_per_asset: 12
   request_timeout_seconds: 10
   user_agent: "hushhunt/0.1 (hunter=matco; contact=<account email>; https://github.com/9matesu/hushhunt)"
+  active:                       # v2: active testing budgets (grant-gated on top)
+    daily_requests_per_program: 400
+    burst_rate_per_second: 2
+oast:                           # out-of-band canaries for blind findings
+  enabled: false                # OQ-V1: decide interactsh self-host vs public
+  server: "https://api.projectdiscovery.io"
+sessions:
+  file: "seeds/accounts.yaml"   # throwaway test accounts (passwords in ENV only)
 selection:
   small_target_max_bounty: 1500
   new_program_days: 540

@@ -40,6 +40,43 @@ subdomain brute-forcing (ct.sh only), scanning out-of-scope assets found
 "along the way" (report via security.txt contact instead), public disclosure
 before triage resolution.
 
+## v2 active testing — the grant model
+
+Precedence, strongest first: **program policy (lint) > operator grant >
+per-program risk_cap**. All three must allow a module before a single active
+request leaves the box.
+
+1. `risk_cap` per program: `off` (nothing, not even passive) < `passive`
+   (v1 checks only) < `low` (low-risk probe modules: redirect/GraphQL/DOM-XSS)
+   < `medium` (medium modules: reflected XSS, SQLi-error, SSTI, JWT) <
+   `high` (deep modules: IDOR, SQLi-boolean, blind OAST, mass-assign — each
+   additionally needs a `deep`-scope grant).
+2. `policy_lint.py` keyword-lints the synced program policy; blocked modules
+   are refused even by `hushhunt grant` (the CLI prints the matched line).
+3. Grants are HMAC-signed (`HH_GRANT_SECRET`), expiring (`--hours`), and
+   request-budgeted (`--max-requests`) — enforced in `HardenedClient` for
+   every `post()` and every module run.
+
+Active-module rules beyond v1's:
+- Only crawl-observed URLs/params are testable (no invented surfaces —
+  enforced by the planner validator AND the checks' `ctx.params` input).
+- XSS evidence uses inert markers; no alert/stealer payloads, ever.
+- SQLi proves an oracle (error fingerprint / TRUE-FALSE delta) — no data
+  extraction, no time-based by default; OAST proves blind bugs via the
+  target's own egress to our canary, nothing in-band.
+- Session modules use ONLY throwaway accounts the operator registered
+  (passwords in env vars only); IDOR reads only objects account A itself
+  observed; mass-assign writes one field to our own profile and ROLLS BACK.
+- Deep findings verify by RE-RUNNING a PoC script in an AST sandbox
+  (no imports except hushhunt, no file/socket/exec builtins, 12-request cap)
+  — the exploit execution IS the deterministic positive gate.
+- Noisy modules (precision <0.25 over ≥4 outcomes) auto-demote for 30 days;
+  only `hushhunt undemote` brings them back.
+
+Never do (v2 additions): GraphQL depth/aliasing abuse, race-condition
+testing, file-upload probing, websocket fuzzing, anything against an auth
+wall we didn't enter with our own registered account.
+
 ## Open questions / operator duties
 
 - Verify per-program policy manually before first hunt (`hushhunt status`).
