@@ -25,7 +25,7 @@ sessions:
 selection:
   small_target_max_bounty: 1500
   new_program_days: 540
-  max_targets_per_night: 6
+  max_targets_per_night: 30
   min_signals_to_triage: 1
 triage:
   min_confidence: 0.75
