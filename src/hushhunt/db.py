@@ -54,11 +54,13 @@ MIGRATIONS = [
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          topic TEXT,
          target_pattern TEXT,
+         param TEXT,
          payload_template TEXT,
          success_count INTEGER DEFAULT 1,
          notes TEXT,
          created_at TEXT,
          updated_at TEXT);""",
+    "ALTER TABLE procedures ADD COLUMN param TEXT;",
 ]
 
 

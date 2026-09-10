@@ -31,10 +31,13 @@ Rules: urls and params MUST come from the observed surface provided
 don't. Prefer routes leaked in js_endpoints context over guessing."""
 
 
-def build_prompt(context: dict) -> tuple[str, str]:
+def build_prompt(context: dict, memory_block: str = "") -> tuple[str, str]:
     mods = "\n".join(f"- {m} (scope {sc})" for m, sc in sorted(ACTIVE_MODULES.items()))
     system = PLAN_SYSTEM.replace("{{ modules }}", mods)
-    return system, json.dumps(context, indent=1, default=str)[:8000]
+    user = json.dumps(context, indent=1, default=str)[:8000]
+    if memory_block:
+        user = memory_block + "\n\n" + user
+    return system, user
 
 
 def validate(pt: PlannedTest, program: dict, conn, now=None,
@@ -77,7 +80,17 @@ def plan(cfg, conn, llm, program: dict, context: dict,
     out/planner_rejected.log (auditable). The model can NEVER widen its own
     permissions; every byte executed passed validate() against operator-set
     gates."""
-    system, user = build_prompt(context)
+    memory_block = ""
+    if conn is not None:
+        try:
+            from .procedures import format_procedures_for_prompt, get_procedures_for_target
+            target_url = program.get("url") or (program.get("includes", [""])[0])
+            procs = get_procedures_for_target(conn, target_url)
+            if procs:
+                memory_block = format_procedures_for_prompt(procs)
+        except Exception:
+            pass
+    system, user = build_prompt(context, memory_block=memory_block)
     reply = llm.complete_json(system, user)
     out_dir = cfg.root / "out"
     out_dir.mkdir(parents=True, exist_ok=True)

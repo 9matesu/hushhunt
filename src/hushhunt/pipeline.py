@@ -401,6 +401,20 @@ def triage_verify_report(cfg, conn, llm, program: dict, na_kb: NaKb,
             continue
         set_stage(conn, fid, "verified")
         verified += 1
+        # Record into AI procedural memory for future high-efficiency test planning
+        try:
+            from .procedures import record_procedure
+            first_sig = sigs[0] if sigs else {}
+            payload_data = json.loads(first_sig.get("payload_json") or "{}")
+            param = payload_data.get("param", "")
+            mod = first_sig.get("check_id", "")
+            target_host = first_sig.get("asset", "").split("://")[-1].split("/")[0]
+            if mod and target_host:
+                record_procedure(conn, mod, target_host, param,
+                                 str(payload_data.get("marker") or payload_data.get("pattern") or ""),
+                                 notes=f"finding_id={fid}")
+        except Exception:
+            pass
         f = dict(conn.execute("SELECT * FROM findings WHERE id=?", (fid,)).fetchone())
         f["id"] = fid
         render_report(conn, cfg, f, sigs, CHECK_CATALOG)
