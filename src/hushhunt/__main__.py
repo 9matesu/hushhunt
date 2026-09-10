@@ -41,6 +41,8 @@ def main(argv=None) -> int:
     learn.add_argument("--finding", type=int, required=True)
     status = sub.add_parser("status", help="summary incl. active posture")
     status.add_argument("--root", default=".")
+    status.add_argument("--analytics", action="store_true",
+                        help="show per-module yield, conversion, and precision metrics")
     grant = sub.add_parser("grant", help="sign an operator grant (v2)")
     grant.add_argument("--root", default=".")
     grant.add_argument("--program", required=True)
@@ -110,6 +112,10 @@ def main(argv=None) -> int:
             print(f"  #{r['id']} {r['program_id']} {r['module']} "
                   f"({r['scope']}) expires {r['expires_at'][:19]} "
                   f"max {r['max_requests']}")
+        if getattr(args, "analytics", False):
+            from .analytics import compute_analytics, format_analytics
+            print("analytics:")
+            print(format_analytics(compute_analytics(conn)))
         return 0
     if args.cmd == "grant":
         from .db import open_db
