@@ -22,6 +22,10 @@ disclosure guidelines and program policy.
    checks (zero active probes) and are heavily de-prioritized by selection.
 5. **Identification.** Every request carries a User-Agent naming the hunter
    account and contact. No cache-busting, no evasion of robots for findings.
+5b. **Autonomous & auto_grant mode.** When `auto_grant.enabled: true` and running
+   `hushhunt run-autonomous`, the pipeline signs its own daily grants.
+   Policy linting, risk caps, and module auto-demotions CONTINUE to gate
+   strictly above auto-grant. Every auto-granted module logs to `out/QUESTIONS.md`.
 6. **Data handling.** Only ≤64 KiB response excerpts stored as evidence;
    secrets found in JS are stored redacted (prefix+length) and reported as
    "available on request". No bulk downloads, no data exfiltration.

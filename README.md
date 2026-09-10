@@ -11,15 +11,22 @@ python -m venv .venv && source .venv/Scripts/activate
 pip install -e ".[dev]"
 cp .env.example .env      # fill HH_H1_USER, HH_H1_API_TOKEN, HH_BC_TOKEN, HH_LLM_API_KEY
 python -m pytest tests/ -q
-python -m hushhunt run-nightly            # sync -> select -> probe -> triage -> verify -> report -> push(draft)
+python -m hushhunt run-autonomous          # 9router-guided autonomous loop (planner -> probe -> triage -> poc -> report)
+python -m hushhunt run-nightly             # single-pass nightly run
 python -m hushhunt learn --finding 7 --outcome resolved   # feed reality back
-python -m hushhunt status
+python -m hushhunt status                  # inspect grants, demotions, precision weights
 ```
 
-Reports land in `out/reports/*.md` (HackerOne submission format) and the human
-review queue in `out/PENDING.md`. `config.yaml -> submit.mode: auto` writes
-`out/submit_payload_*.json` for the browser-assisted flow (confidence >= 0.9
-and Safe Harbor programs only; researcher-side API submission pending OQ-1).
+Reports land in `out/reports/*.md` (HackerOne submission format), `out/reports/findings.sarif` (SARIF 2.1.0),
+and the human review queue in `out/PENDING.md`.
+
+## System Documentation & Architecture
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Seven-layer system architecture, data models, state machines, and fail-closed safety invariants.
+- **[docs/PROCEDURES.md](docs/PROCEDURES.md)**: AI operational handbook — canonical attack patterns, payload escalation ladders, and parameter heuristics.
+- **[docs/MODULE_DEV.md](docs/MODULE_DEV.md)**: Developer guide for building active/passive checks, offline fixtures, and PoC templates.
+- **[docs/ANALYTICS_AND_LEARNING.md](docs/ANALYTICS_AND_LEARNING.md)**: Mathematical self-improvement loop, EWMA precision, and module yield analytics.
+- **[docs/SAFETY.md](docs/SAFETY.md)**: Operating safety policy, rate caps, default-deny boundaries, and AST sandboxing.
 
 ## How it stays quiet
 
