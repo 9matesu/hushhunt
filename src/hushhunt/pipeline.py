@@ -113,6 +113,15 @@ def _try_openapi(hc, base_url: str) -> dict:
     return {}
 
 
+def _record_param(conn, program_id: str, path: str, param: str,
+                  source: str, sample_url: str = "", sample_val: str = ""):
+    with conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO params_seen(program_id,url,param,source,"
+            "sample_url,sample_value) VALUES(?,?,?,?,?,?)",
+            (program_id, path, param, source, sample_url, sample_val))
+
+
 def probe_program(cfg, conn, program: dict, transport=None, ct_factory=None) -> int:
     """Baseline GET once per asset; all checks evaluated against the SAME
     response (fetch-once-evaluate-many). safe_harbor=none => passive-only
@@ -129,7 +138,7 @@ def probe_program(cfg, conn, program: dict, transport=None, ct_factory=None) -> 
             resp = hc.get(url)
         except (OutOfScope, BudgetExceeded, httpx.HTTPError):
             continue
-        # --- Recon engines: drift gate + schema ingestion + hidden params ---
+        # --- Drift gate (DB-only, zero extra requests) ---
         try:
             from .drift import check_drift, init_drift_table
             init_drift_table(conn)
@@ -139,31 +148,6 @@ def probe_program(cfg, conn, program: dict, transport=None, ct_factory=None) -> 
                     "asset": url, "check_id": "drift_changed",
                     "severity_hint": "info",
                     "payload": {"drift_note": note}}]) if "drift_changed" in CHECK_CATALOG else 0
-        except Exception:
-            pass
-        try:
-            from .schema_miner import parse_openapi_paths
-            from .db import record_param
-            for ep in parse_openapi_paths(_try_openapi(hc, url)):
-                for p in ep.get("params", []):
-                    try:
-                        record_param(conn, program["id"], ep["path"], p, "", "")
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        try:
-            from .param_miner import find_hidden_params
-            from .db import record_param
-            for hit in find_hidden_params(hc, url):
-                try:
-                    record_param(conn, program["id"], url, hit["param"], "", hit["probe_url"])
-                except Exception:
-                    pass
-                n += _store_signals(conn, program, hc, url, [{
-                    "asset": url, "check_id": "hidden_param",
-                    "severity_hint": "low",
-                    "payload": {"param": hit["param"], "status": hit["status"]}}]) if "hidden_param" in CHECK_CATALOG else 0
         except Exception:
             pass
         ctx = Ctx(resp=resp, fetch=(None if passive_only else hc.get),

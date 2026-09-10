@@ -50,7 +50,7 @@ def pick_targets(conn: sqlite3.Connection, cfg, weights: dict[str, float],
     scored: list[tuple[float, dict]] = []
     for row in conn.execute("SELECT * FROM programs").fetchall():
         p = dict(row)
-        if p["id"] in crowded:
+        if p["id"] in crowded and p.get("platform") != "simulator":
             continue
         scope = json.loads(p["scope_json"] or "{}")
         norm = {"id": p["id"], "name": p["name"], "url": p["url"],
