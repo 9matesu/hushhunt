@@ -37,7 +37,9 @@ def discover(conn, cfg, program: dict, client_factory=None) -> list[str]:
     certificate name must never smuggle an out-of-scope host into the queue."""
     from .db import add_asset
     factory = client_factory or (lambda **kw: httpx.Client(**kw))
-    client = factory(timeout=15) if client_factory else factory(timeout=30)
+    # ponytail: strict 8s total timeout. crt.sh streams slowly when overloaded; skip quickly
+    t_out = httpx.Timeout(8.0, connect=5.0)
+    client = factory(timeout=t_out)
     includes, excludes = program["includes"], program["excludes"]
     added: list[str] = []
     for root in sorted(_roots(includes)):
