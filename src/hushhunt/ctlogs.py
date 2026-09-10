@@ -44,7 +44,7 @@ def discover(conn, cfg, program: dict, client_factory=None) -> list[str]:
     added: list[str] = []
     for root in sorted(_roots(includes)):
         try:
-            r = client.get(f"{CRTS_H}/", params={"q": f"%.{root}", "output": "json"})
+            r = client.get(f"{CRTS_H}/", params={"q": f"%.{root}", "output": "json"}, timeout=t_out)
             if r.status_code != 200:
                 continue  # crt.sh flakiness: one attempt, no retries (one no-retry policy)
             names = _candidates(r.json())
