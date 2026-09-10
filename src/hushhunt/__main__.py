@@ -7,6 +7,16 @@ from .config import Config
 from .pipeline import run_nightly
 
 
+def _load_cfg(root: str):
+    from pathlib import Path
+    if (Path(root) / "config.yaml").exists():
+        return Config.load(root)
+    # bare root (tests, fresh checkouts): repo-default config, root overridden
+    cfg = Config.load(Path(__file__).resolve().parents[2])
+    cfg.root = Path(root)
+    return cfg
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="hushhunt")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -14,6 +24,15 @@ def main(argv=None) -> int:
     nightly.add_argument("--root", default=".")
     nightly.add_argument("--sim", action="store_true",
                          help="offline run against the built-in vulnapp (no network)")
+    auto = sub.add_parser("run-autonomous",
+                          help="AI-guided loop (9router) until quiet or --max-cycles")
+    auto.add_argument("--root", default=".")
+    auto.add_argument("--sim", action="store_true",
+                      help="offline loop against the built-in vulnapp (no network, no cost)")
+    auto.add_argument("--model", default=None,
+                      help="override llm.model for this loop (e.g. ag/claude-sonnet-4-6)")
+    auto.add_argument("--max-cycles", type=int, default=3,
+                      help="stop after N full passes (default 3; quiet stops earlier)")
     learn = sub.add_parser("learn", help="record one human-observed outcome")
     learn.add_argument("--root", default=".")
     learn.add_argument("--outcome", required=True,
@@ -36,7 +55,30 @@ def main(argv=None) -> int:
     und.add_argument("--root", default=".")
     und.add_argument("module")
     args = ap.parse_args(argv)
-    cfg = Config.load(args.root)
+    cfg = _load_cfg(args.root)
+    if args.cmd == "run-autonomous":
+        if getattr(args, "sim", False):
+            from .sim import run_sim
+            run_sim(cfg)
+            return 0
+        if getattr(args, "model", None):
+            cfg._d["llm"]["model"] = args.model
+        from .triage.llm import LlmClient
+        llm = LlmClient(cfg)
+        max_cycles = getattr(args, "max_cycles", 3)
+        print(f"HushHunt Autonomous Suite [AI: 9router / {cfg['llm.model']}]")
+        print(f"Starting loop (max {max_cycles} cycles, auto-grant enabled)...")
+        for cycle in range(1, max_cycles + 1):
+            print(f"\n--- CYCLE {cycle}/{max_cycles} ---")
+            line = run_nightly(cfg, llm=llm)
+            import re
+            m = dict(re.findall(r"(\w+)=(\S+)", line))
+            # Stop if no new signals or no actions were taken
+            if int(m.get("signals", "0")) == 0 and int(m.get("active_reqs", "0")) == 0:
+                print("Suite reached quiet state: no new signals to investigate.")
+                break
+        print("\nAutonomous scan completed. Review out/PENDING.md and out/reports/.")
+        return 0
     if args.cmd == "run-nightly":
         if getattr(args, "sim", False):
             from .sim import run_sim

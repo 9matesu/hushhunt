@@ -455,7 +455,12 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
                         ctx_dict = {"params_seen": [{"url_path": p["sample_url"],
                                                      "param": p["param"]}
                                                     for p in p_seen if p.get("sample_url")]}
-                        planned = plan_tests(cfg, conn, llm, prog, ctx_dict)
+                        try:
+                            planned = plan_tests(cfg, conn, llm, prog, ctx_dict)
+                        except Exception as e:
+                            print(f"PLANNER-WARN {prog['id']}: "
+                                  f"{type(e).__name__} — continuing with sweep")
+                            planned = []
                         if planned:
                             ap = active_probe_planned(cfg, conn, prog, planned,
                                                       transport=transport,

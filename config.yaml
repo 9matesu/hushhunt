@@ -1,9 +1,11 @@
 llm:
-  base_url: "https://api.b.ai/v1"   # 9router; use http://localhost:20128/v1 for TokenRouter/qwen
-  model: "ag/glm-4.6"
+  base_url: "http://localhost:20128/v1"   # 9router / TokenRouter endpoint
+  model: "ag/gemini-3.8-flash"            # Fast, high-accuracy reasoning model on 9router
   temperature: 0.0
-  prices:                       # USD per 1M tokens [input, output] (cost meter)
-    glm-4.6: [0.4, 1.6]         # local TokenRouter models: omit => cost 0 (honest)
+  prices:                                 # USD per 1M tokens [input, output]
+    gemini-3.8-flash: [0.15, 0.60]
+    gemini-3.7-flash: [0.15, 0.60]
+    claude-sonnet-4-6: [3.0, 15.0]
 limits:
   rate_per_second_per_target: 1
   daily_requests_per_program: 150

@@ -1,6 +1,21 @@
 from __future__ import annotations
 
 import httpx
+import re
+
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
+
+
+def _extract_json(text: str) -> dict:
+    """9router models sometimes wrap JSON in ```json fences or add prose
+    around it. Strip fences, then cut first-{ to last-} before parsing."""
+    m = _FENCE.search(text or "")
+    body = m.group(1) if m else (text or "")
+    start, end = body.find("{"), body.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("no JSON object in reply")
+    import json as _json
+    return _json.loads(body[start:end + 1])
 
 
 class TriageContractError(Exception):
@@ -37,6 +52,7 @@ class LlmClient:
             self.cfg["llm.base_url"].rstrip("/") + "/chat/completions",
             headers={"Authorization": f"Bearer {self.cfg.secret('HH_LLM_API_KEY')}"},
             json={"model": self.cfg["llm.model"],
+                  "stream": False,
                   "temperature": self.cfg["llm.temperature"],
                   "response_format": {"type": "json_object"},
                   "messages": [{"role": "system", "content": system},
@@ -50,9 +66,9 @@ class LlmClient:
         self.usage["cost_usd"] += self._cost(int(usage.get("prompt_tokens") or 0),
                                              int(usage.get("completion_tokens") or 0))
         self.usage["calls"] += 1
-        import json as _json
         try:
-            out = _json.loads(payload["choices"][0]["message"]["content"])
+            content = payload["choices"][0]["message"]["content"]
+            out = _extract_json(content)
         except (KeyError, IndexError, ValueError) as e:
             raise TriageContractError(str(e)) from e
         if not isinstance(out, dict):
