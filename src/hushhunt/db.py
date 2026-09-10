@@ -50,6 +50,15 @@ MIGRATIONS = [
     "ALTER TABLE params_seen ADD COLUMN sample_url TEXT;",
     "ALTER TABLE params_seen ADD COLUMN sample_value TEXT;",
     "ALTER TABLE grants ADD COLUMN auto_granted INTEGER DEFAULT 0;",
+    """CREATE TABLE IF NOT EXISTS procedures(
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         topic TEXT,
+         target_pattern TEXT,
+         payload_template TEXT,
+         success_count INTEGER DEFAULT 1,
+         notes TEXT,
+         created_at TEXT,
+         updated_at TEXT);""",
 ]
 
 
