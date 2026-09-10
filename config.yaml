@@ -1,5 +1,5 @@
 llm:
-  base_url: "https://api.b.ai/v1"          # 9router BAI endpoint (for ag/gemini-3.8-flash)
+  base_url: "http://localhost:20128/v1"   # local 9router TokenRouter endpoint
   model: "ag/gemini-3.8-flash"            # Fast, high-accuracy reasoning model on 9router
   temperature: 0.0
   prices:                                 # USD per 1M tokens [input, output]
