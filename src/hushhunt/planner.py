@@ -31,12 +31,17 @@ Rules: urls and params MUST come from the observed surface provided
 don't. Prefer routes leaked in js_endpoints context over guessing."""
 
 
-def build_prompt(context: dict, memory_block: str = "") -> tuple[str, str]:
+def build_prompt(context: dict, memory_block: str = "", hunter_block: str = "") -> tuple[str, str]:
     mods = "\n".join(f"- {m} (scope {sc})" for m, sc in sorted(ACTIVE_MODULES.items()))
     system = PLAN_SYSTEM.replace("{{ modules }}", mods)
     user = json.dumps(context, indent=1, default=str)[:8000]
+    blocks = []
+    if hunter_block:
+        blocks.append(hunter_block)
     if memory_block:
-        user = memory_block + "\n\n" + user
+        blocks.append(memory_block)
+    if blocks:
+        user = "\n\n".join(blocks) + "\n\n" + user
     return system, user
 
 
@@ -81,6 +86,7 @@ def plan(cfg, conn, llm, program: dict, context: dict,
     permissions; every byte executed passed validate() against operator-set
     gates."""
     memory_block = ""
+    hunter_block = ""
     if conn is not None:
         try:
             from .procedures import format_procedures_for_prompt, get_procedures_for_target
@@ -90,7 +96,18 @@ def plan(cfg, conn, llm, program: dict, context: dict,
                 memory_block = format_procedures_for_prompt(procs)
         except Exception:
             pass
-    system, user = build_prompt(context, memory_block=memory_block)
+    try:
+        from .hunter_kb import get_techniques_for_target
+        ctx_url = context.get("target_url", "") or program.get("url", "")
+        ctx_headers = context.get("headers", {}) or {}
+        ctx_status = context.get("status", 200)
+        techs = get_techniques_for_target({"url": ctx_url, "headers": ctx_headers, "status": ctx_status})
+        if techs:
+            lines = [f"- {t['author']}: {t['name']} — {t['description']}" for t in techs]
+            hunter_block = "### HUNTER KNOWLEDGE BASE PLAYBOOKS (prior art, adapt probes to scope):\n" + "\n".join(lines)
+    except Exception:
+        pass
+    system, user = build_prompt(context, memory_block=memory_block, hunter_block=hunter_block)
     reply = llm.complete_json(system, user)
     out_dir = cfg.root / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
