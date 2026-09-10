@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 from urllib.parse import parse_qs, urljoin, urlparse
 
@@ -87,7 +88,7 @@ def crawl(cfg, conn, program: dict, transport=None,
                      action, ""))
                 params_n += 1
         for href in LINK_RE.findall(r.text):
-            child = urljoin(norm, href)
+            child = urljoin(norm, html.unescape(href))
             if urlparse(child).netloc == base.netloc and allowed(child):
                 queue.append(child)
     conn.commit()
