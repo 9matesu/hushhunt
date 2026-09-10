@@ -1,5 +1,5 @@
 llm:
-  base_url: "http://localhost:20128/v1"   # 9router / TokenRouter endpoint
+  base_url: "https://api.b.ai/v1"          # 9router BAI endpoint (for ag/gemini-3.8-flash)
   model: "ag/gemini-3.8-flash"            # Fast, high-accuracy reasoning model on 9router
   temperature: 0.0
   prices:                                 # USD per 1M tokens [input, output]
@@ -38,7 +38,6 @@ auto_grant:                     # operator opt-in: pipeline mints grants itself
   ttl_hours: 24                 # each auto grant expires daily
   max_requests: 150             # per program/day active-request headroom
 platforms:
-  hackerone: {enabled: true}
-  bugcrowd: {enabled: true}
-  bbscope: {enabled: true}       # token-free mirror (bbscope.com); used while
-                                 # platform tokens are missing/broken
+  hackerone: {enabled: false}     # dead token (401); bbscope mirrors H1 scopes token-free
+  bugcrowd: {enabled: false}      # no token; re-enable with HH_BC_TOKEN when live
+  bbscope: {enabled: true}        # token-free mirror (bbscope.com); primary source
