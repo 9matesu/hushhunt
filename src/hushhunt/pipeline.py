@@ -10,6 +10,7 @@ import httpx
 from .adapters import REGISTRY
 import hushhunt.adapters.hackerone  # noqa: F401  (registers)
 import hushhunt.adapters.bugcrowd   # noqa: F401  (registers)
+import hushhunt.adapters.bbscope     # noqa: F401  (registers)
 from .checks import CHECK_CATALOG, Ctx
 import hushhunt.checks.headers       # noqa: F401  (registration side-effects)
 import hushhunt.checks.tlsconfig     # noqa: F401

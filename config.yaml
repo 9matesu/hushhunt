@@ -37,3 +37,5 @@ auto_grant:                     # operator opt-in: pipeline mints grants itself
 platforms:
   hackerone: {enabled: true}
   bugcrowd: {enabled: true}
+  bbscope: {enabled: true}       # token-free mirror (bbscope.com); used while
+                                 # platform tokens are missing/broken
