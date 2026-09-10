@@ -19,6 +19,14 @@ class SimLlm:
             return {"poc_script": (
                 f'r = client.fetch("{asset}?q=%3Cb%3Ehushx%3C%2Fb%3E")\n'
                 'assert "<b>hushx</b>" in r.text\nresult["ok"] = True\n')}
+        # Follow-up test planner prompts: propose no new tests in sim
+        if "propose tests" in system.lower() or "test planner" in system.lower() or '"tests"' in user[:50]:
+            try:
+                data = json.loads(user)
+                if isinstance(data, dict) and ("params_seen" in data or "apis_seen" in data):
+                    return {"tests": []}
+            except Exception:
+                return {"tests": []}
         m = re.search(r"SIGNALS:\n(.*)$", user, re.S)
         sigs = json.loads(m.group(1))
         vuln = [s for s in sigs if s["check_id"] in

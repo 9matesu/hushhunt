@@ -197,8 +197,39 @@ def granted_modules(conn, cfg, program: dict) -> list[dict]:
     return out
 
 
+def active_probe_planned(cfg, conn, program: dict, planned_tests: list,
+                         transport=None, session_factory=None, oast=None) -> int:
+    """Execute AI-planned targeted tests within granted & validated boundaries."""
+    if not planned_tests:
+        return 0
+    modules = granted_modules(conn, cfg, program)
+    if not modules:
+        return 0
+    names = {m["module"]: m["grant"]["id"] for m in modules}
+    hc = HardenedClient(conn, cfg, program, transport=transport)
+    n = 0
+    for pt in planned_tests:
+        if pt.module not in names or pt.module not in CHECK_CATALOG:
+            continue
+        try:
+            baseline = hc.get(pt.url)
+        except Exception:
+            continue
+        ctx = Ctx(resp=baseline, fetch=hc.get, asset_url=pt.url,
+                  params=[(pt.url, pt.param, "")])
+        ctx.grant_id = names[pt.module]
+        ctx.post = hc.post
+        try:
+            hits = CHECK_CATALOG[pt.module].fn(ctx)
+            if hits:
+                n += _store_signals(conn, program, hc, pt.url, hits)
+        except Exception:
+            continue
+    return n
+
+
 def active_probe(cfg, conn, program: dict, transport=None,
-                 session_factory=None, oast=None) -> int:
+                 session_factory=None, oast=None, llm=None) -> int:
     """Active WSTG modules, ONLY for granted+linted+cap-passed modules.
     Session-based modules use broker accounts; graphql posts are grant-gated
     (HardenedClient.post). Returns #new active signals."""
@@ -417,6 +448,21 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
                                  session_factory=session_factory, oast=oast)
                 active_n += a
                 sig_n += a
+                # AI-guided targeted active probes if LLM is active
+                if llm is not None:
+                    p_seen = _params_seen(conn, prog["id"])
+                    if p_seen:
+                        ctx_dict = {"params_seen": [{"url_path": p["sample_url"],
+                                                     "param": p["param"]}
+                                                    for p in p_seen if p.get("sample_url")]}
+                        planned = plan_tests(cfg, conn, llm, prog, ctx_dict)
+                        if planned:
+                            ap = active_probe_planned(cfg, conn, prog, planned,
+                                                      transport=transport,
+                                                      session_factory=session_factory,
+                                                      oast=oast)
+                            active_n += ap
+                            sig_n += ap
             except (BudgetExceeded, OutOfScope):
                 pass
             live = verify_fetch or HardenedClient(conn, cfg, prog,

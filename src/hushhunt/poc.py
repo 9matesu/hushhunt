@@ -142,6 +142,8 @@ def synthesize_poc(cfg, llm, finding: dict, signals: list[dict]) -> str:
             code = reply["poc_script"]
             validate_ast(code)
             return code
+    except PoCContractError:
+        raise
     except Exception:
         pass
     # Fallback to deterministic synthesis if LLM fails or is absent
