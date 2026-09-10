@@ -54,7 +54,9 @@ when ALL THREE gates pass:
    (`policy_lint.py`); blocked modules can't be granted at all (belt), and
 3. **signed grant** — `hushhunt grant --program h1:x --module idor --scope
    deep --hours 48 --max-requests 150` (HMAC with `HH_GRANT_SECRET`;
-   expiring, request-budgeted). Precedence: **policy > grant > cap**. A grant
+   expiring, request-budgeted). Or flip `auto_grant.enabled: true` and the
+   pipeline signs its own daily grants — policy and cap still gate it.
+   Precedence: **policy > grant > cap**; a grant
    never widens the cap; the LLM planner can propose tests but the validator
    rejects anything grantless, out-of-scope, or invented-surface
    (`out/planner_rejected.log` is the audit trail).

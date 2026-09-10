@@ -56,6 +56,13 @@ request leaves the box.
 3. Grants are HMAC-signed (`HH_GRANT_SECRET`), expiring (`--hours`), and
    request-budgeted (`--max-requests`) — enforced in `HardenedClient` for
    every `post()` and every module run.
+3b. **auto_grant mode** (operator opt-in in config.yaml): the pipeline mints
+   its own grants each night with the same TTL/budget machinery. It does NOT
+   bypass gates 1-2: policy-lint blocks still stand, risk_cap still bounds,
+   demotion still silences noisy modules, and `deep: true` is a separate
+   opt-in for blast-radius modules. Every auto-grant is logged to
+   out/QUESTIONS.md (revoke any time with `hushhunt revoke <id>`). Grants
+   expire daily, so a revoked/disabled module stays dead unless re-granted.
 
 Active-module rules beyond v1's:
 - Only crawl-observed URLs/params are testable (no invented surfaces —
