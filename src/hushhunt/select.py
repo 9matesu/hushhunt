@@ -43,14 +43,18 @@ def _crowded_program_ids(conn: sqlite3.Connection) -> set[str]:
 
 
 def pick_targets(conn: sqlite3.Connection, cfg, weights: dict[str, float],
-                 k: int | None = None) -> list[dict]:
+                 k: int | None = None,
+                 include_simulator: bool = False) -> list[dict]:
     """Top-k programs to hunt tonight, normalized for the probing stage."""
     k = k or cfg["selection.max_targets_per_night"]
     crowded = _crowded_program_ids(conn)
     scored: list[tuple[float, dict]] = []
     for row in conn.execute("SELECT * FROM programs").fetchall():
         p = dict(row)
-        if p["id"] in crowded and p.get("platform") != "simulator":
+        is_sim = p.get("platform") == "simulator"
+        if is_sim and not include_simulator:
+            continue
+        if p["id"] in crowded and not is_sim:
             continue
         scope = json.loads(p["scope_json"] or "{}")
         norm = {"id": p["id"], "name": p["name"], "url": p["url"],

@@ -475,7 +475,9 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
     conn = _load(cfg)
     na_kb = NaKb.load(_seeds_path(cfg))
     programs = sync(cfg, conn, client_factory=client_factory)
-    targets = pick_targets(conn, cfg, get_weights(conn))
+    # ponytail: injected transports mean offline test/sim — allow simulator program
+    targets = pick_targets(conn, cfg, get_weights(conn),
+                           include_simulator=transport is not None)
     steer = drain_steer(cfg)          # operator input between runs (REDCELL port)
     if steer["skip"]:
         targets = [t for t in targets if t["id"] not in steer["skip"]]
