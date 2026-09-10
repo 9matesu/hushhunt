@@ -44,14 +44,14 @@ class HardenedClient:
         self._last = 0.0
         self._per_host: dict[str, int] = {}
         self.evidence_by_url: dict[str, str] = {}   # url -> last evidence dir
-        self._client = httpx.Client(
+        from .camouflage import make_client
+        self._client = make_client(
             transport=transport,   # injectable for offline tests only
             proxy=self.proxy,
             timeout=cfg["limits.request_timeout_seconds"],
             headers={"User-Agent": cfg["limits.user_agent"],
                      "Accept": "*/*", "Accept-Language": "en"},
-            follow_redirects=False,
-            verify=True)
+            follow_redirects=False)
 
     def _check(self, url: str, kind: str = "passive") -> None:
         includes = self.program["includes"]
