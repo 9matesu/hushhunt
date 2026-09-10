@@ -32,7 +32,7 @@ from .checks.active import ACTIVE_MODULES
 from .crawl import crawl
 from .ctlogs import discover
 from .db import add_signal, get_weights, open_db, set_stage
-from .grants import active_grant, risk_allows
+from .grants import active_grant, ensure_auto_grant, risk_allows
 from .http import BudgetExceeded, HardenedClient, OutOfScope
 from .learn import auto_demote, demoted_modules, propose_playbook_patch
 from .oast import OastClient
@@ -150,19 +150,45 @@ def _module_risk(module: str) -> str:
     return defn.risk if defn else "high"
 
 
+def _auto_grant_cfg(cfg) -> dict | None:
+    a = cfg.get("auto_grant") or {}
+    return a if a.get("enabled") else None
+
+
+def _apply_auto_cap(cfg, db_prog: dict) -> dict:
+    """Auto-grant mode raises the DEFAULT cap (untouched 'passive') to
+    auto_grant.risk_cap — but never overrides a cap the operator set by
+    hand: 'low'/'medium'/'high'/'off' set manually always wins."""
+    auto = _auto_grant_cfg(cfg)
+    prog = dict(db_prog)
+    if auto and prog.get("risk_cap", "passive") == "passive":
+        prog["risk_cap"] = str(auto.get("risk_cap", "medium"))
+    return prog
+
+
 def granted_modules(conn, cfg, program: dict) -> list[dict]:
     """ALL THREE gates must pass: risk_cap >= module risk, policy lint not
-    blocking, unexpired in-headroom grant. Precedence: policy > grant > cap."""
+    blocking, unexpired in-headroom grant. Precedence: policy > grant > cap.
+    In auto_grant mode the grant is minted automatically AFTER the other two
+    gates pass — the auto-grant never overrides policy or cap."""
     lint = lint_policy(program.get("policy_text", ""))
     dem = demoted_modules(conn)
+    auto = _auto_grant_cfg(cfg)
     out = []
     for module, scope in ACTIVE_MODULES.items():
+        if auto and not auto.get("deep", False) and scope == "deep":
+            continue     # deep modules need the explicit deep opt-in
         if not risk_allows(program.get("risk_cap", "passive"), _module_risk(module)):
             continue
         if not allowed_module(lint["blocked"], module):
             continue
         if module in dem:
             continue
+        if auto and ensure_auto_grant(conn, program["id"], module, scope, auto):
+            ask(cfg, program, "auto_granted",
+                f"auto-granted {module} (scope={scope}) — revoke with "
+                f"`hushhunt revoke <id>` or disable auto_grant in config.yaml",
+                ["leave it", "revoke"])
         g = active_grant(conn, program["id"], module, scope)
         if g is None:
             continue
@@ -380,7 +406,8 @@ def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
         try:
             db_prog = dict(conn.execute(
                 "SELECT * FROM programs WHERE id=?", (prog["id"],)).fetchone())
-            prog["risk_cap"] = db_prog.get("risk_cap", "passive")
+            capped = _apply_auto_cap(cfg, db_prog)
+            prog["risk_cap"] = capped["risk_cap"]
             prog["policy_text"] = db_prog.get("policy_text", "")
             sig_n += probe_program(cfg, conn, prog, transport=transport,
                                    ct_factory=ct_factory)

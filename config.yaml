@@ -28,6 +28,12 @@ triage:
   min_confidence: 0.75
 submit:
   mode: "draft"
+auto_grant:                     # operator opt-in: pipeline mints grants itself
+  enabled: true                 # policy-lint/risk_cap/demotion STILL gate above it
+  deep: true                    # allow blast-radius modules (idor/sqli-bool/oast/rce/nuclei)
+  risk_cap: "high"              # applied only where you never set a cap by hand
+  ttl_hours: 24                 # each auto grant expires daily
+  max_requests: 150             # per program/day active-request headroom
 platforms:
   hackerone: {enabled: true}
   bugcrowd: {enabled: true}

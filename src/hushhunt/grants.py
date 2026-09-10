@@ -18,17 +18,35 @@ def _sig(program_id: str, module: str, expires_at: str) -> str:
 
 
 def create_grant(conn, program_id: str, module: str, scope: str,
-                 ttl_hours: int, max_requests: int) -> int:
+                 ttl_hours: int, max_requests: int, auto: bool = False) -> int:
     if scope not in SCOPE_ORDER:
         raise ValueError(f"unknown scope {scope!r}")
     expires = (datetime.now(timezone.utc) + timedelta(hours=ttl_hours)).isoformat()
     cur = conn.execute(
-        """INSERT INTO grants(program_id,module,scope,max_requests,expires_at,signed)
-           VALUES(?,?,?,?,?,?)""",
+        """INSERT INTO grants(program_id,module,scope,max_requests,expires_at,
+             signed,auto_granted) VALUES(?,?,?,?,?,?,?)""",
         (program_id, module, scope, max_requests, expires,
-         _sig(program_id, module, expires)))
+         _sig(program_id, module, expires), int(auto)))
     conn.commit()
     return cur.lastrowid
+
+
+def ensure_auto_grant(conn, program_id: str, module: str, scope: str,
+                      auto: dict) -> bool:
+    """Auto-grant mode: mint the grant the operator would have typed, with
+    the same expiry/budget/HMAC machinery — but only if none is already
+    active (idempotent) and HH_GRANT_SECRET exists (fail-closed otherwise).
+    This NEVER bypasses policy-lint/risk_cap/demotion: those checks happen in
+    granted_modules() before this is ever called."""
+    if active_grant(conn, program_id, module, scope) is not None:
+        return False
+    try:
+        create_grant(conn, program_id, module, scope,
+                     int(auto.get("ttl_hours", 24)),
+                     int(auto.get("max_requests", 150)), auto=True)
+    except RuntimeError:
+        return False
+    return True
 
 
 def active_grant(conn, program_id: str, module: str,

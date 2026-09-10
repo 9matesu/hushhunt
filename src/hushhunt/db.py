@@ -49,6 +49,7 @@ MIGRATIONS = [
          UNIQUE(program_id, url, param));""",
     "ALTER TABLE params_seen ADD COLUMN sample_url TEXT;",
     "ALTER TABLE params_seen ADD COLUMN sample_value TEXT;",
+    "ALTER TABLE grants ADD COLUMN auto_granted INTEGER DEFAULT 0;",
 ]
 
 
