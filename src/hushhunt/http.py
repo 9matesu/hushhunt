@@ -39,11 +39,15 @@ class HardenedClient:
         # egress proxy (REDCELL port): burn the VPS's reputation, not your
         # home IP. NOTE: honored for REAL traffic only — when a MockTransport
         # is injected (tests) httpx ignores `proxy`; that is by design.
-        self.proxy = (cfg.get("limits.proxy_url") or None) if transport is None \
-            else None
+        proxies = cfg.get("limits.proxies", []) or []
+        from .proxy_pool import ProxyPool
+        self.proxy_pool = ProxyPool(proxies) if proxies else None
+        self.proxy = (self.proxy_pool.get_next_proxy() if self.proxy_pool
+                      else (cfg.get("limits.proxy_url") or None)) if transport is None else None
         self._last = 0.0
         self._per_host: dict[str, int] = {}
         self.evidence_by_url: dict[str, str] = {}   # url -> last evidence dir
+        self._transport = transport
         from .camouflage import make_client
         self._client = make_client(
             transport=transport,   # injectable for offline tests only
@@ -52,6 +56,20 @@ class HardenedClient:
             headers={"User-Agent": cfg["limits.user_agent"],
                      "Accept": "*/*", "Accept-Language": "en"},
             follow_redirects=False)
+
+    def _rotate_proxy(self) -> None:
+        if self.proxy_pool and self._transport is None:
+            nxt = self.proxy_pool.get_next_proxy()
+            if nxt and nxt != self.proxy:
+                self.proxy = nxt
+                from .camouflage import make_client
+                self._client = make_client(
+                    transport=None,
+                    proxy=self.proxy,
+                    timeout=self.cfg["limits.request_timeout_seconds"],
+                    headers={"User-Agent": self.cfg["limits.user_agent"],
+                             "Accept": "*/*", "Accept-Language": "en"},
+                    follow_redirects=False)
 
     def _check(self, url: str, kind: str = "passive") -> None:
         includes = self.program["includes"]
@@ -77,6 +95,7 @@ class HardenedClient:
     def get(self, url: str, headers: dict | None = None,
             evidence_tag: str = "probe") -> httpx.Response:
         self._check(url)
+        self._rotate_proxy()
         self._last = time.time()
         host = httpx.URL(url).host
         t0 = time.time()
