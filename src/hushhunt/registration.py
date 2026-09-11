@@ -17,6 +17,14 @@ CSRF_PATTERN = re.compile(
     r'<input[^>]+name=[\'"](csrf_token|authenticity_token|_csrf|_token|csrf)[\'"][^>]+value=[\'"]([^\'"]+)[\'"]',
     re.I
 )
+CAPTCHA_PATTERN = re.compile(
+    r'g-recaptcha|cf-turnstile|h-captcha|recaptcha/api\.js|hcaptcha\.com|challenges\.cloudflare\.com',
+    re.I
+)
+JS_ONLY_PATTERN = re.compile(
+    r'<div\s+id=[\'"](?:root|__next|app)[\'"]\s*>\s*</div>|<app-root>\s*</app-root>',
+    re.I
+)
 
 
 class RegistrationError(Exception):
@@ -63,6 +71,17 @@ def register_account(
     # 1. Fetch signup form & extract CSRF
     get_resp = http.get(signup_url)
     get_resp.raise_for_status()
+
+    if CAPTCHA_PATTERN.search(get_resp.text):
+        raise RegistrationError(
+            f"CAPTCHA_REQUIRED on {signup_url}: manual registration needed, "
+            f"then store token via CLI flags (--cookie/--bearer/--auth-file)."
+        )
+    if JS_ONLY_PATTERN.search(get_resp.text) and "<form" not in get_resp.text.lower():
+        raise RegistrationError(
+            f"JS_REQUIRED on {signup_url}: no server-rendered form; "
+            "register manually and import tokens for BountyForge IDOR hunts."
+        )
 
     csrf_match = CSRF_PATTERN.search(get_resp.text)
     csrf_name, csrf_val = (csrf_match.group(1), csrf_match.group(2)) if csrf_match else (None, None)

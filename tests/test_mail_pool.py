@@ -33,3 +33,27 @@ def test_mailbox_create_and_poll_mock():
     content = box.read_message(42)
     link = extract_activation_link(content["body"], allowed_hosts=["example.com"])
     assert link == "https://example.com/verify?token=tok"
+
+
+def test_mailbox_fallback_to_alternate_provider():
+    def handler(req):
+        url_str = str(req.url)
+        # Primary provider 1secmail fails with 500
+        if "1secmail.com" in url_str:
+            return httpx.Response(500)
+        # Alternate provider endpoints
+        if "f=get_email_address" in url_str:
+            return httpx.Response(200, json={"email_addr": "altuser@guerrillamail.com", "sid_token": "token123"})
+        if "f=check_email" in url_str:
+            return httpx.Response(200, json={"list": [{"mail_id": 99, "mail_subject": "Confirm"}]})
+        if "f=fetch_email" in url_str:
+            return httpx.Response(200, json={"mail_body": '<a href="https://example.com/verify?alt=1">Link</a>'})
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    box = DisposableMailbox(client=client)
+    assert box.email == "altuser@guerrillamail.com"
+    msgs = box.check_messages()
+    assert len(msgs) == 1
+    link = box.wait_for_link(allowed_hosts=["example.com"], timeout=1)
+    assert link == "https://example.com/verify?alt=1"

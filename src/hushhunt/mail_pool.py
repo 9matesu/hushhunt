@@ -6,8 +6,9 @@ from urllib.parse import urlparse
 from typing import Any
 import httpx
 
-# ponytail: 1secmail public API, zero registration, zero API keys required
-API_URL = "https://www.1secmail.com/api/v1/"
+# ponytail: 1secmail primary with GuerrillaMail fallback, zero auth required
+SECMAIL_API = "https://www.1secmail.com/api/v1/"
+GUERRILLA_API = "https://api.guerrillamail.com/ajax.php"
 LINK_RE = re.compile(r'href=[\'"](https?://[^\'">\s]+)[\'"]', re.I)
 
 
@@ -22,29 +23,59 @@ def extract_activation_link(html_or_text: str, allowed_hosts: list[str]) -> str 
 
 
 class DisposableMailbox:
-    """Manages a single disposable email address lifecycle."""
+    """Manages disposable email address with automatic provider fallback."""
 
     def __init__(self, client: httpx.Client | None = None):
         self.client = client or httpx.Client(timeout=15.0)
-        self.email, self.login, self.domain = self._create_mailbox()
+        self.provider = "1secmail"
+        self.sid_token = ""
+        self.email = ""
+        self.login = ""
+        self.domain = ""
+        self._init_mailbox()
 
-    def _create_mailbox(self) -> tuple[str, str, str]:
-        resp = self.client.get(f"{API_URL}?action=genRandomMailbox&count=1")
+    def _init_mailbox(self) -> None:
+        try:
+            resp = self.client.get(f"{SECMAIL_API}?action=genRandomMailbox&count=1")
+            if resp.status_code == 200:
+                self.email = resp.json()[0]
+                self.login, self.domain = self.email.split("@")
+                self.provider = "1secmail"
+                return
+        except Exception:
+            pass
+
+        # Fallback to GuerrillaMail
+        self.provider = "guerrillamail"
+        resp = self.client.get(f"{GUERRILLA_API}?f=get_email_address")
         resp.raise_for_status()
-        addr = resp.json()[0]
-        login, domain = addr.split("@")
-        return addr, login, domain
+        data = resp.json()
+        self.email = data.get("email_addr", "")
+        self.sid_token = data.get("sid_token", "")
+        if "@" in self.email:
+            self.login, self.domain = self.email.split("@")
 
     def check_messages(self) -> list[dict[str, Any]]:
-        resp = self.client.get(f"{API_URL}?action=getMessages&login={self.login}&domain={self.domain}")
-        if resp.status_code == 200:
-            return resp.json()
-        return []
+        if self.provider == "1secmail":
+            resp = self.client.get(f"{SECMAIL_API}?action=getMessages&login={self.login}&domain={self.domain}")
+            return resp.json() if resp.status_code == 200 else []
+        else:
+            resp = self.client.get(f"{GUERRILLA_API}?f=check_email&seq=0&sid_token={self.sid_token}")
+            if resp.status_code == 200:
+                items = resp.json().get("list", [])
+                return [{"id": m.get("mail_id"), "subject": m.get("mail_subject")} for m in items]
+            return []
 
     def read_message(self, message_id: int) -> dict[str, Any]:
-        resp = self.client.get(f"{API_URL}?action=readMessage&login={self.login}&domain={self.domain}&id={message_id}")
-        resp.raise_for_status()
-        return resp.json()
+        if self.provider == "1secmail":
+            resp = self.client.get(f"{SECMAIL_API}?action=readMessage&login={self.login}&domain={self.domain}&id={message_id}")
+            resp.raise_for_status()
+            return resp.json()
+        else:
+            resp = self.client.get(f"{GUERRILLA_API}?f=fetch_email&email_id={message_id}&sid_token={self.sid_token}")
+            resp.raise_for_status()
+            data = resp.json()
+            return {"body": data.get("mail_body", "")}
 
     def wait_for_link(self, allowed_hosts: list[str], timeout: int = 45, interval: int = 3) -> str | None:
         """Poll inbox until an activation link is detected or timeout expires."""

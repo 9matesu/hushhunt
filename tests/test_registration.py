@@ -53,3 +53,51 @@ def test_register_account_flow_mock():
     assert acct["user"] == "hunter1@1secmail.com"
     assert acct["id"] == "acct_a"
     assert "password" in acct
+
+
+def test_register_account_captcha_flagged_for_manual():
+    mailbox_mock = MagicMock()
+    mailbox_mock.email = "hunter2@1secmail.com"
+
+    def handler(req):
+        if req.url.path == "/signup" and req.method == "GET":
+            return httpx.Response(200, text='<div class="g-recaptcha" data-sitekey="6LcAbC"></div>'
+                                            '<script src="https://www.google.com/recaptcha/api.js"></script>')
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    prog = {"id": "test-p", "policy_text": "", "includes": ["example.com"], "excludes": []}
+
+    with pytest.raises(RegistrationError, match="CAPTCHA_REQUIRED"):
+        register_account(
+            signup_url="https://example.com/signup",
+            login_url="https://example.com/login",
+            program=prog,
+            mailbox=mailbox_mock,
+            client=client,
+            account_label="acct_b",
+        )
+
+
+def test_register_account_js_required_flagged_for_manual():
+    mailbox_mock = MagicMock()
+    mailbox_mock.email = "hunter3@1secmail.com"
+
+    def handler(req):
+        if req.url.path == "/signup" and req.method == "GET":
+            return httpx.Response(200, text='<html><body><div id="root"></div>'
+                                            '<script src="/static/bundle.js"></script></body></html>')
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    prog = {"id": "test-p", "policy_text": "", "includes": ["example.com"], "excludes": []}
+
+    with pytest.raises(RegistrationError, match="JS_REQUIRED"):
+        register_account(
+            signup_url="https://example.com/signup",
+            login_url="https://example.com/login",
+            program=prog,
+            mailbox=mailbox_mock,
+            client=client,
+            account_label="acct_b",
+        )
