@@ -64,6 +64,17 @@ def main(argv=None) -> int:
     audit_cmd.add_argument("--ad-policy", help="path to JSON AD policy dump")
     audit_cmd.add_argument("--scan-dir", help="directory path to scan for leaked secrets")
     audit_cmd.add_argument("--export-feed", action="store_true", help="export findings to out/hermes-feed/findings.json")
+    bf_cmd = sub.add_parser("bountyforge", help="run BountyForge hunt against an in-scope target")
+    bf_cmd.add_argument("--target", required=True, help="target URL (must be in scope of program)")
+    bf_cmd.add_argument("--program", help="program ID to check scope against")
+    bf_cmd.add_argument("--cookie", help="session cookie string")
+    bf_cmd.add_argument("--bearer", help="bearer token")
+    bf_cmd.add_argument("--auth-file", help="auth JSON file path")
+    bf_cmd.add_argument("--auth-file-a", help="user A auth JSON file path (IDOR)")
+    bf_cmd.add_argument("--auth-file-b", help="user B auth JSON file path (IDOR)")
+    bf_cmd.add_argument("--idor-only", action="store_true", help="run only IDOR checks")
+    bf_cmd.add_argument("--active", action="store_true", help="run active injection checks")
+    bf_cmd.add_argument("--import-db", action="store_true", help="store results into DB signals table")
     args = ap.parse_args(argv)
     cfg = _load_cfg(getattr(args, "root", "."))
     if args.cmd == "run-autonomous":
@@ -211,6 +222,47 @@ def main(argv=None) -> int:
             print(f"FEED-EXPORTED {out_file}")
         print(json.dumps({"findings_count": len(findings), "findings": findings}, indent=2))
         return 0 if not findings else 2
+    if args.cmd == "bountyforge":
+        from .adapters.bountyforge import run_bountyforge_hunt, import_bountyforge_findings
+        from .db import open_db
+        conn = open_db(cfg.root / "var" / "hushhunt.db")
+        includes: list[str] = []
+        excludes: list[str] = []
+        pid = getattr(args, "program", None)
+        if pid:
+            import json as _json
+            row = conn.execute("SELECT scope_json FROM programs WHERE id=?", (pid,)).fetchone()
+            if row and row["scope_json"]:
+                scope = _json.loads(row["scope_json"])
+                includes = scope.get("in_scope", scope.get("includes", []))
+                excludes = scope.get("out_of_scope", scope.get("excludes", []))
+        else:
+            # No program specified: derive scope from DB programs (default-deny).
+            import json as _json
+            for r in conn.execute("SELECT scope_json FROM programs"):
+                if r["scope_json"]:
+                    scope = _json.loads(r["scope_json"])
+                    includes.extend(scope.get("in_scope", scope.get("includes", [])))
+                    excludes.extend(scope.get("out_of_scope", scope.get("excludes", [])))
+        data = run_bountyforge_hunt(
+            args.target,
+            includes=includes,
+            excludes=excludes,
+            cookie=args.cookie,
+            bearer=args.bearer,
+            auth_file=args.auth_file,
+            auth_file_a=args.auth_file_a,
+            auth_file_b=args.auth_file_b,
+            idor_only=args.idor_only,
+            active=args.active,
+        )
+        findings = data.get("findings", [])
+        if getattr(args, "import_db", False) and pid:
+            n = import_bountyforge_findings(conn, pid, args.target, findings)
+            conn.commit()
+            print(f"IMPORTED {n}")
+        print(json.dumps(data, indent=2)[:4000])
+        return 0
     return 1
 
 
