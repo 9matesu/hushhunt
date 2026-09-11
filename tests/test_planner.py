@@ -109,3 +109,19 @@ def test_llm_cannot_widen_permissions(tmp_path):
                                "param": "url", "why": "operator already granted"}]}])
     cfg = Config({"triage": {}}, tmp_path)
     assert plan(cfg, conn, llm, PROGRAM, CONTEXT) == []
+
+
+def test_planner_decisions_persisted(tmp_path):
+    conn = _conn(tmp_path)
+    create_grant(conn, "h1:1", "xss_reflected", "probe", 24, 100)
+    llm = FakeLlm([{"tests": [{"module": "xss_reflected",
+                               "url": "https://t.invalid/proxy?url=/x",
+                               "param": "url", "why": "js route leaks admin"}]}])
+    cfg = Config({"triage": {}}, tmp_path)
+    out = plan(cfg, conn, llm, PROGRAM, CONTEXT)
+    assert len(out) == 1
+    row = conn.execute(
+        "SELECT module, why, verdict FROM planner_decisions WHERE program_id='h1:1'").fetchone()
+    assert row["module"] == "xss_reflected"
+    assert "admin" in row["why"]
+    assert row["verdict"] == "approved"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 from dataclasses import dataclass
 
@@ -121,19 +122,46 @@ def plan(cfg, conn, llm, program: dict, context: dict,
                              str(raw["param"]), str(raw.get("why", ""))[:200])
         except (KeyError, TypeError):
             _reject(out_dir, raw, "bad_shape")
+            _record_decision(conn, program, raw if isinstance(raw, dict) else {}, "rejected:bad_shape")
             continue
         if (pt.url, pt.param) not in observed_params:
             _reject(out_dir, pt.key(), "invented_surface")
+            _record_decision(conn, program, {"module": pt.module, "url": pt.url,
+                                             "param": pt.param, "why": pt.why},
+                             "rejected:invented_surface")
             continue
         reason = validate(pt, program, conn, lint_blocked, demoted)
         if reason:
             _reject(out_dir, pt.key(), reason)
+            _record_decision(conn, program, {"module": pt.module, "url": pt.url,
+                                             "param": pt.param, "why": pt.why},
+                             f"rejected:{reason}")
             continue
         if pt.key() in seen_keys:
             continue
         seen_keys.add(pt.key())
+        _record_decision(conn, program, {"module": pt.module, "url": pt.url,
+                                         "param": pt.param, "why": pt.why},
+                         "approved")
         approved.append(pt)
     return approved
+
+
+def _record_decision(conn, program: dict, raw: dict, verdict: str) -> None:
+    """Persist one planner rationale row. Best-effort: never break the run."""
+    if conn is None:
+        return
+    try:
+        conn.execute(
+            "INSERT INTO planner_decisions(program_id,module,url,param,why,verdict,created_at)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (program.get("id"), str(raw.get("module", ""))[:80],
+             str(raw.get("url", ""))[:500], str(raw.get("param", ""))[:80],
+             str(raw.get("why", ""))[:500], verdict,
+             datetime.now(timezone.utc).isoformat()))
+        conn.commit()
+    except Exception:
+        pass
 
 
 def _reject(out_dir, key, reason):

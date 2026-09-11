@@ -61,6 +61,9 @@ MIGRATIONS = [
          created_at TEXT,
          updated_at TEXT);""",
     "ALTER TABLE procedures ADD COLUMN param TEXT;",
+    """CREATE TABLE IF NOT EXISTS planner_decisions(
+         id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT, module TEXT,
+         url TEXT, param TEXT, why TEXT, verdict TEXT, created_at TEXT);""",
 ]
 
 
