@@ -46,6 +46,7 @@ def test_sync_classifies_targets():
     assert all("203.0" not in i and "com." not in i for i in scope["includes"])
     assert row["risk_cap"] == "passive"          # conservative default
     assert row["safe_harbor"] == "unknown"       # honest: not synced
+    assert row["max_bounty"] == 0                # is_bbp: False => 0
     assert "READ IT ON THE PROGRAM PAGE" in row["policy_text"]
 
 
@@ -78,3 +79,27 @@ def test_classify_target():
 def test_registered_in_registry():
     from hushhunt.adapters import REGISTRY
     assert "bbscope" in REGISTRY
+
+
+def test_bbp_flag_sets_bounty_marker(tmp_path=None):
+    import tempfile
+    from pathlib import Path as P
+    tmp = P(tempfile.mkdtemp())
+    conn = open_db(tmp / "t3.db")
+    cfg = Config({}, tmp)
+    fx = [{"platform": "h1", "handle": "paidco",
+           "url": "https://hackerone.com/paidco",
+           "is_bbp": True, "targets": ["app.paidco.io"]},
+          {"platform": "h1", "handle": "freeco-vdp",
+           "url": "https://hackerone.com/freeco-vdp",
+           "is_bbp": False, "targets": ["app.freeco.io"]}]
+    def h(req):
+        return httpx.Response(200, json=fx)
+    fac = lambda **kw: httpx.Client(transport=httpx.MockTransport(h))
+    n = BBScopeAdapter(client_factory=fac).sync_programs(conn, cfg)
+    assert n == 2
+    paid = conn.execute("SELECT max_bounty FROM programs WHERE id='h1:paidco'"
+                        ).fetchone()["max_bounty"]
+    free = conn.execute("SELECT max_bounty FROM programs WHERE id='h1:freeco-vdp'"
+                        ).fetchone()["max_bounty"]
+    assert paid == 1000 and free == 0

@@ -101,6 +101,7 @@ class BBScopeAdapter:
             if not includes:
                 continue
             pid = f"{prefix}:{handle}"
+            is_bbp = bool(p.get("is_bbp"))
             upsert_program(conn, {
                 "id": pid, "platform": f"bbscope-{self.platform}",
                 "name": handle.replace("-", " ").title(),
@@ -109,7 +110,7 @@ class BBScopeAdapter:
                 # select.py treats !='none' mildly favorable; active modules
                 # are blocked by risk_cap='passive' (the default) until the
                 # operator READS the policy and raises the cap + grants.
-                "max_bounty": 0,            # unknown => scores as non-bounty VDP
+                "max_bounty": 1000 if is_bbp else 0, # ponytail: 1000 flag value for BBP, fetch exact tiers if API exposes
                 "avg_resolution_h": 0.0, "created_at_remote": None,
                 "policy_text": "(policy not synced via bbscope; READ IT ON "
                                "THE PROGRAM PAGE before any active testing)",
