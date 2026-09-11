@@ -43,6 +43,9 @@ def main(argv=None) -> int:
     status.add_argument("--root", default=".")
     status.add_argument("--analytics", action="store_true",
                         help="show per-module yield, conversion, and precision metrics")
+    dash = sub.add_parser("dashboard", help="local read-only live dashboard")
+    dash.add_argument("--root", default=".")
+    dash.add_argument("--port", type=int, default=8765)
     grant = sub.add_parser("grant", help="sign an operator grant (v2)")
     grant.add_argument("--root", default=".")
     grant.add_argument("--program", required=True)
@@ -149,6 +152,17 @@ def main(argv=None) -> int:
         conn = open_db(cfg.root / "var" / "hushhunt.db")
         revoke_grant(conn, args.grant_id)
         print(f"REVOKED #{args.grant_id}")
+        return 0
+    if args.cmd == "dashboard":
+        from .dashboard import run_server
+        import pathlib
+        root = pathlib.Path(args.root)
+        db = str(root / "var" / "hushhunt.db")
+        log = next((str(p) for n in ("paid_run.log", "night_run.log", "live_run.log")
+                    if (p := root / "var" / n).exists()), None)
+        srv, port = run_server(db, log, args.port)
+        print(f"dashboard on http://127.0.0.1:{port}/ (db={db} log={log})")
+        srv.serve_forever()
         return 0
     if args.cmd == "undemote":
         from .db import open_db
