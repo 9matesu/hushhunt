@@ -62,6 +62,8 @@ def main(argv=None) -> int:
     audit_cmd = sub.add_parser("local-audit", help="run defensive SSH or AD baseline audit")
     audit_cmd.add_argument("--sshd-config", help="path to sshd_config")
     audit_cmd.add_argument("--ad-policy", help="path to JSON AD policy dump")
+    audit_cmd.add_argument("--scan-dir", help="directory path to scan for leaked secrets")
+    audit_cmd.add_argument("--export-feed", action="store_true", help="export findings to out/hermes-feed/findings.json")
     args = ap.parse_args(argv)
     cfg = _load_cfg(getattr(args, "root", "."))
     if args.cmd == "run-autonomous":
@@ -76,11 +78,19 @@ def main(argv=None) -> int:
         max_cycles = getattr(args, "max_cycles", 3)
         print(f"HushHunt Autonomous Suite [AI: 9router / {cfg['llm.model']}]")
         print(f"Starting loop (max {max_cycles} cycles, auto-grant enabled)...")
+        from .db import open_db
+        from .metaharness import append_loop_journal, export_hermes_findings
         for cycle in range(1, max_cycles + 1):
             print(f"\n--- CYCLE {cycle}/{max_cycles} ---")
             line = run_nightly(cfg, llm=llm)
             import re
             m = dict(re.findall(r"(\w+)=(\S+)", line))
+            try:
+                conn = open_db(cfg.root / "var" / "hushhunt.db")
+                export_hermes_findings(conn, cfg.root / "out")
+                append_loop_journal(cfg.root / "var", "cycle_complete", {"cycle": cycle, "metrics": m})
+            except Exception:
+                pass
             # Stop if no new signals or no actions were taken
             if int(m.get("signals", "0")) == 0 and int(m.get("active_reqs", "0")) == 0:
                 print("Suite reached quiet state: no new signals to investigate.")
@@ -179,12 +189,26 @@ def main(argv=None) -> int:
         import json
         import pathlib
         findings = []
-        if args.sshd_config:
+        if getattr(args, "sshd_config", None):
             text = pathlib.Path(args.sshd_config).read_text(encoding="utf-8")
             findings.extend(audit_sshd_config(text))
-        if args.ad_policy:
+        if getattr(args, "ad_policy", None):
             data = json.loads(pathlib.Path(args.ad_policy).read_text(encoding="utf-8"))
             findings.extend(audit_ad_policy(data))
+        if getattr(args, "scan_dir", None):
+            from .checks.file_analyzer import scan_directory
+            for hit in scan_directory(pathlib.Path(args.scan_dir)):
+                findings.append({
+                    "id": hit["check_id"],
+                    "severity": hit.get("severity", "medium"),
+                    "issue": f"exposed secret in {hit['filename']}:{hit['line']} ({hit['match']})",
+                })
+        if getattr(args, "export_feed", False):
+            from .db import open_db
+            from .metaharness import export_hermes_findings
+            conn = open_db(cfg.root / "var" / "hushhunt.db")
+            out_file = export_hermes_findings(conn, cfg.root / "out")
+            print(f"FEED-EXPORTED {out_file}")
         print(json.dumps({"findings_count": len(findings), "findings": findings}, indent=2))
         return 0 if not findings else 2
     return 1
