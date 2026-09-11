@@ -17,6 +17,7 @@ import hushhunt.checks.tlsconfig     # noqa: F401
 import hushhunt.checks.files         # noqa: F401
 import hushhunt.checks.cors          # noqa: F401
 import hushhunt.checks.jsmining      # noqa: F401
+import hushhunt.checks.exposed_services  # noqa: F401
 import hushhunt.checks.active.xss    # noqa: F401
 import hushhunt.checks.active.domxss   # noqa: F401
 import hushhunt.checks.active.sqli   # noqa: F401
