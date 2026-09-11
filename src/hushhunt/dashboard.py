@@ -5,176 +5,1004 @@ import pathlib
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# ponytail: single-file UI; split PAGE into templates/ only if it passes ~800 lines
-PAGE = """<!doctype html><html><head><meta charset="utf-8">
-<title>HushHunt Command Center</title>
+# ponytail: single-file UI; split PAGE into templates/ only if it passes ~1200 lines
+PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HushHunt — Autonomous Bounty Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Consolas,Menlo,monospace;background:#0d1117;color:#c9d1d9;display:flex;min-height:100vh}
-#side{width:230px;background:#010409;border-right:1px solid #30363d;padding:16px 0;flex-shrink:0}
-#side h1{color:#f0883e;font-size:16px;padding:0 16px 12px;border-bottom:1px solid #21262d;margin-bottom:12px}
-#side button{display:block;width:100%;text-align:left;background:none;border:none;color:#8b949e;
-  padding:10px 16px;font:inherit;font-size:13px;cursor:pointer;border-left:3px solid transparent}
-#side button:hover{color:#c9d1d9;background:#161b22}
-#side button.on{color:#58a6ff;border-left-color:#f0883e;background:#161b22}
-#main{flex:1;padding:20px;overflow-y:auto;max-width:1200px}
-.tab{display:none}.tab.on{display:block}
-.card{background:#161b22;padding:14px;border:1px solid #30363d;border-radius:6px;margin-bottom:14px}
-h2{color:#58a6ff;margin-bottom:10px;font-size:16px}
-.kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.kpi{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px 18px;min-width:130px}
-.kpi b{display:block;font-size:24px;color:#f0883e}
-.kpi small{color:#8b949e}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #21262d}
-th{color:#58a6ff}
-tr:hover td{background:#1c2128}
-a{color:#58a6ff}
-.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;margin-right:4px}
-.paid{background:#1a472a;color:#7ee787}.vdp{background:#33272a;color:#f08080}
-.sev-high{background:#5a1a1a;color:#ff7b72}.sev-medium{background:#4a3500;color:#ffa657}
-.sev-low{background:#1c2f4a;color:#79c0ff}.sev-info{background:#21262d;color:#8b949e}
-pre{background:#0d1117;padding:8px;overflow-x:auto;border:1px solid #21262d;border-radius:4px;font-size:12px}
-input[type=text]{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;
-  border-radius:4px;font:inherit;width:100%;margin-bottom:10px}
-.good{border-left:3px solid #3fb950}.bad{border-left:3px solid #6e7681}
-.funnel{display:flex;align-items:center;gap:6px;margin:10px 0;flex-wrap:wrap}
-.fstep{background:#1c2128;border:1px solid #30363d;border-radius:6px;padding:8px 14px;text-align:center}
-.fstep b{color:#f0883e;font-size:18px}.arrow{color:#6e7681;font-size:20px}
-.bar-row{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px}
-.bar-lbl{width:170px;text-align:right;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bar{height:14px;background:#1f6feb;border-radius:2px;min-width:2px}
-.donut{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.legend{font-size:12px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
-.explain{background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:10px;margin:8px 0;font-size:13px}
-.explain b{color:#7ee787}
+:root {
+  --bg-base: #08090a;
+  --bg-side: #0b0c0e;
+  --bg-card: rgba(255, 255, 255, 0.025);
+  --bg-card-hover: rgba(255, 255, 255, 0.045);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-focus: rgba(113, 112, 255, 0.5);
+  --text-primary: #f7f8f8;
+  --text-secondary: #d0d6e0;
+  --text-muted: #8a8f98;
+  --accent-indigo: #5e6ad2;
+  --accent-violet: #7170ff;
+  --accent-glow: rgba(113, 112, 255, 0.15);
+  --status-green: #10b981;
+  --status-coral: #ff7b72;
+  --status-amber: #d29922;
+  --status-blue: #58a6ff;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sidebar */
+#sidebar {
+  width: 260px;
+  background: var(--bg-side);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+}
+.brand {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.brand-badge {
+  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.live-pill {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--status-green);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-green);
+  box-shadow: 0 0 6px var(--status-green);
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.nav-group {
+  padding: 16px 12px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.nav-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+.nav-btn.active {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-subtle);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.nav-btn svg { width: 16px; height: 16px; stroke-width: 2; opacity: 0.8; }
+.nav-btn.active svg { stroke: var(--accent-violet); opacity: 1; }
+
+.sidebar-foot {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Main Content Area */
+#main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: radial-gradient(circle at 50% 0%, rgba(113, 112, 255, 0.03), transparent 40%);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Cards & Surfaces */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: rgba(255, 255, 255, 0.1); }
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.2px;
+}
+.card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* KPI Top Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-violet), transparent);
+  opacity: 0.6;
+}
+.kpi-val {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  font-feature-settings: 'cv01', 'ss03';
+}
+.kpi-lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.kpi-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Funnel Visualizer */
+.funnel-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  overflow-x: auto;
+}
+.funnel-step {
+  flex: 1;
+  min-width: 140px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px 14px;
+  text-align: center;
+}
+.funnel-step b {
+  display: block;
+  font-size: 20px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.funnel-step span {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.funnel-arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+  opacity: 0.4;
+}
+
+/* Bar Chart */
+.bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.bar-item { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.bar-label {
+  width: 160px;
+  text-align: right;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track {
+  flex: 1;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet));
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.bar-val { width: 45px; font-weight: 600; color: var(--text-primary); }
+
+/* Donut Chart & Legend */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.donut-legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.legend-row { display: flex; align-items: center; gap: 8px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+/* Tables */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+th {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+}
+tr:hover td { background: rgba(255, 255, 255, 0.015); }
+a { color: var(--accent-violet); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
+}
+.badge-paid { background: rgba(16, 185, 129, 0.15); color: var(--status-green); border: 1px solid rgba(16, 185, 129, 0.3); }
+.badge-vdp { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+.badge-high { background: rgba(255, 123, 114, 0.15); color: var(--status-coral); border: 1px solid rgba(255, 123, 114, 0.3); }
+.badge-medium { background: rgba(210, 153, 34, 0.15); color: var(--status-amber); border: 1px solid rgba(210, 153, 34, 0.3); }
+.badge-low { background: rgba(88, 166, 255, 0.15); color: var(--status-blue); }
+.badge-info { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
+/* Triage Cards (Good vs Bad) */
+.triage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) { .triage-grid { grid-template-columns: 1fr; } }
+.triage-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 18px;
+}
+.triage-box.good { border-left: 3px solid var(--status-green); }
+.triage-box.bad { border-left: 3px solid var(--text-muted); }
+.triage-item {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.triage-item b { color: var(--text-primary); font-size: 13px; display: block; margin-bottom: 4px; }
+.triage-tag { color: var(--accent-violet); font-family: var(--font-mono); font-size: 11px; }
+
+/* Filter & Search Bar */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.search-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: var(--accent-violet); }
+.filter-pills { display: flex; gap: 6px; }
+.pill-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pill-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+.pill-btn.active { background: rgba(113, 112, 255, 0.15); color: var(--accent-violet); border-color: var(--accent-violet); }
+
+/* Live Terminal Log */
+.terminal {
+  background: #050607;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 480px;
+  overflow-y: auto;
+  color: #c9d1d9;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.terminal-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.terminal-controls label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 </style>
 </head>
 <body>
-<div id="side">
-<h1>HushHunt</h1>
-<button class="on" data-t="t-overview">Command Center</button>
-<button data-t="t-triage">Good vs Bad Info</button>
-<button data-t="t-domains">Domain &amp; Target Map</button>
-<button data-t="t-vulns">Vulnerabilities</button>
-<button data-t="t-live">Live Traffic &amp; Logs</button>
-</div>
-<div id="main">
-<div class="tab on" id="t-overview">
-  <div class="kpis" id="kpis">Loading...</div>
-  <div class="card"><h2>Pipeline Funnel</h2><div class="funnel" id="funnel"></div></div>
-  <div class="card"><h2>Status Codes</h2><div class="donut" id="donut"></div></div>
-  <div class="card"><h2>Signals by Check</h2><div id="bars"></div></div>
-</div>
-<div class="tab" id="t-triage">
-  <div class="card"><h2>What to care about (Good Info = possible money)</h2>
-    <div class="explain"><b>JWT leaks</b> — auth tokens in public JS bundles. If the token is long-lived
-    and accepted by an API, an attacker replays it. Check <span style="color:#8b949e">exp / alg / which host accepts it</span>.</div>
-    <div class="explain"><b>CORS with credentials</b> — server reflects ANY Origin with
-    <span style="color:#8b949e">Access-Control-Allow-Credentials: true</span>. Only a real bug when the
-    endpoint serves private data AND the browser sends cookies there.</div>
-    <div class="explain"><b>SSTI / SQLi / XSS</b> — your input evaluated or reflected by the backend.
-    Needs a verified proof (math evaluated to 49, error strings, marker reflected).</div>
-    <div class="explain"><b>Nuclei hits</b> — matched CVE/misconfig templates (low/medium/high/critical only).</div>
+
+<!-- Left Navigation Sidebar -->
+<aside id="sidebar">
+  <div class="brand">
+    <div class="brand-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span>HUSH<span style="color:var(--accent-violet)">HUNT</span></span>
+      <span class="brand-badge">PRO MAX</span>
+    </div>
+    <div class="live-pill" id="live-indicator">
+      <span class="live-dot"></span>
+      <span id="live-status">LIVE MONITORING</span>
+    </div>
   </div>
-  <div class="card"><h2>What gets dropped (Noise / Bad Info)</h2>
-    <div class="explain">Missing CSP / HSTS / X-Frame-Options on marketing pages — informational, $0.
-    Public telemetry keys (Google Analytics, LaunchDarkly client SDK, Mixpanel) — meant to be public.
-    robots.txt / sitemap.xml / standard 404s — not vulnerabilities.</div>
+
+  <nav class="nav-group">
+    <button class="nav-btn active" data-tab="tab-overview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      Command Center
+    </button>
+    <button class="nav-btn" data-tab="tab-triage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path></svg>
+      Good vs Bad Info
+    </button>
+    <button class="nav-btn" data-tab="tab-domains">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path></svg>
+      Target &amp; Scope Map
+    </button>
+    <button class="nav-btn" data-tab="tab-vulns">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      Vulnerability Vault
+    </button>
+    <button class="nav-btn" data-tab="tab-live">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      Live Traffic &amp; Console
+    </button>
+  </nav>
+
+  <div class="sidebar-foot">
+    <span>Autonomous Bot v1.0</span>
+    <span id="last-ping" style="color:var(--text-muted);font-family:var(--font-mono)">...</span>
   </div>
-  <div class="card"><h2>Live Actionable Signals</h2><div id="good-list">Loading...</div></div>
-</div>
-<div class="tab" id="t-domains">
-  <div class="card"><h2>Target Scopes &amp; Domain Explorer</h2>
-    <input type="text" id="domq" placeholder="filter: domain keyword, e.g. api, sandbox, kucoin ...">
-    <div id="dom-list">Loading...</div>
-  </div>
-</div>
-<div class="tab" id="t-vulns">
-  <div class="card"><h2>Vulnerability &amp; Signal Vault</h2><div id="vuln-list">Loading...</div></div>
-</div>
-<div class="tab" id="t-live">
-  <div class="card"><h2>Live Traffic (last 50 requests)</h2><div id="traffic">Loading...</div></div>
-  <div class="card"><h2>Runner Log (live tail)</h2><pre id="log">Waiting...</pre></div>
-</div>
-</div>
+</aside>
+
+<!-- Main Interactive Content Panel -->
+<main id="main">
+
+  <!-- TAB 1: Command Center -->
+  <section class="tab-pane active" id="tab-overview">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpi-reqs">--</div>
+        <div class="kpi-lbl">Total Requests Sent</div>
+        <div class="kpi-meta" id="kpi-last-target">Scanning active targets...</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpi-signals">--</div>
+        <div class="kpi-lbl">Security Signals Found</div>
+        <div class="kpi-meta" id="kpi-signals-rate">Triaged by AI engine</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:var(--status-green)" id="kpi-verified">--</div>
+        <div class="kpi-lbl">Verified Vulnerabilities</div>
+        <div class="kpi-meta" id="kpi-reported">0 reported</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:var(--text-muted)" id="kpi-dropped">--</div>
+        <div class="kpi-lbl">Noise Dropped</div>
+        <div class="kpi-meta">Filtered out (NA-KB)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" style="color:var(--accent-violet)" id="kpi-spend">$0.00</div>
+        <div class="kpi-lbl">AI Reasoning Spend</div>
+        <div class="kpi-meta" id="kpi-calls">Local TokenRouter</div>
+      </div>
+    </div>
+
+    <!-- Funnel Card -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Bug Bounty Conversion Funnel</div>
+          <div class="card-desc">How raw HTTP requests turn into verified, paid bounty findings</div>
+        </div>
+      </div>
+      <div class="funnel-container" id="funnel-view">
+        <div class="funnel-step"><b id="fn-reqs">0</b><span>Requests</span></div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-step"><b id="fn-sigs">0</b><span>Signals</span></div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-step"><b id="fn-noise" style="color:var(--text-muted)">0</b><span>Dropped Noise</span></div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-step"><b id="fn-ver" style="color:var(--status-green)">0</b><span>Verified Bugs</span></div>
+        <div class="funnel-arrow">→</div>
+        <div class="funnel-step"><b id="fn-rep" style="color:var(--accent-violet)">0</b><span>Reports Ready</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <!-- Status Codes -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">HTTP Response Codes</div>
+          <div class="card-desc" id="donut-latency">Avg Latency: -- ms</div>
+        </div>
+        <div class="donut-wrap" id="donut-view">
+          <div style="color:var(--text-muted)">Loading traffic breakdown...</div>
+        </div>
+      </div>
+
+      <!-- Signals by Check Type -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Active Checks Breakdown</div>
+          <div class="card-desc">Vulnerability vectors tested</div>
+        </div>
+        <div class="bar-chart" id="bars-view">
+          <div style="color:var(--text-muted)">Loading check types...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: Good vs Bad Info -->
+  <section class="tab-pane" id="tab-triage">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">HushHunt Triage Intelligence: What Matters &amp; What Doesn't</div>
+          <div class="card-desc">Clear guide for naive users: separate high-value bounties from automated noise</div>
+        </div>
+      </div>
+
+      <div class="triage-grid">
+        <!-- Good Info -->
+        <div class="triage-box good">
+          <h3 style="color:var(--status-green);font-size:14px;margin-bottom:8px">🔥 Good Info (High-Value Bounties)</h3>
+          <p style="color:var(--text-muted);font-size:12px">Signals the autonomous loop pursues for payout:</p>
+
+          <div class="triage-item">
+            <b>JWT &amp; API Secret Leaks</b>
+            Auth tokens or credentials found inside client bundles (.js). If the token is long-lived and accepted by an API endpoint, it grants unauthorized access.
+            <div class="triage-tag">Checks: js_secret, exposed_files</div>
+          </div>
+          <div class="triage-item">
+            <b>CORS with Reflected Origin &amp; Credentials</b>
+            Server reflects attacker's <span style="color:#fff">Origin</span> along with <span style="color:#fff">Access-Control-Allow-Credentials: true</span>. If the endpoint serves private profile/account data, an attacker can steal it via cross-domain browser requests.
+            <div class="triage-tag">Checks: cors_misconfig</div>
+          </div>
+          <div class="triage-item">
+            <b>Server-Side Template Injection (SSTI) &amp; SQLi</b>
+            Backend evaluates user input as dynamic code (e.g. <code>{{7*7}} → 49</code>). Can lead directly to Remote Code Execution (RCE) and top-tier bounties ($1,000–$5,000).
+            <div class="triage-tag">Checks: ssti, sqli</div>
+          </div>
+          <div class="triage-item">
+            <b>Nuclei CVE &amp; Zero-Day Hits</b>
+            Known CVE signatures matched with precision on staging, admin, or API surfaces. Filtered to drop informative noise.
+            <div class="triage-tag">Checks: nuclei_cve, misconfig</div>
+          </div>
+        </div>
+
+        <!-- Bad Info -->
+        <div class="triage-box bad">
+          <h3 style="color:var(--text-muted);font-size:14px;margin-bottom:8px">🗑️ Bad Info (Ignored Noise)</h3>
+          <p style="color:var(--text-muted);font-size:12px">Automatically dropped by HushHunt to avoid wasting time &amp; budget:</p>
+
+          <div class="triage-item">
+            <b>Missing Best-Practice Headers</b>
+            Missing <code>Content-Security-Policy</code>, <code>X-Frame-Options</code>, or <code>HSTS</code> on static marketing pages. Bug bounty programs award $0 and mark as Informative.
+            <div class="triage-tag">Action: Auto-dropped (NA-KB)</div>
+          </div>
+          <div class="triage-item">
+            <b>Public Telemetry &amp; Analytics Keys</b>
+            Client-side keys meant to be public: Google Analytics (G-XXXX), Mixpanel tokens, LaunchDarkly client IDs, reCAPTCHA site keys. They carry no administrative authority.
+            <div class="triage-tag">Action: Auto-dropped (NA-KB)</div>
+          </div>
+          <div class="triage-item">
+            <b>Standard 404s &amp; Public robots.txt</b>
+            Normal web behavior. Discovering <code>/robots.txt</code> or standard error pages is recon context, not a vulnerability.
+            <div class="triage-tag">Action: Indexed for crawl, not alerted</div>
+          </div>
+          <div class="triage-item">
+            <b>Rate Limiting / 429 WAF blocks</b>
+            Temporary rate-limiting responses. HushHunt backs off dynamically rather than mistaking them for security flaws.
+            <div class="triage-tag">Action: Auto-throttled</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actionable Live Signals -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Live Actionable Candidates</div>
+          <div class="card-desc">Active signals undergoing AI triage &amp; verification</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="table-actionable">
+          <thead>
+            <tr><th>ID</th><th>Program</th><th>Check Vector</th><th>Severity</th><th>Target Asset</th></tr>
+          </thead>
+          <tbody><tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Loading actionable items...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: Target & Scope Map -->
+  <section class="tab-pane" id="tab-domains">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Target Scopes &amp; Domain Map</div>
+          <div class="card-desc">HackerOne &amp; Bugcrowd synchronized bug bounty programs</div>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <input type="text" class="search-input" id="dom-search" placeholder="Search by domain, handle, or asset keyword (e.g. kucoin, api, sandbox)...">
+        <div class="filter-pills">
+          <button class="pill-btn active" data-filter="all">All (436)</button>
+          <button class="pill-btn" data-filter="paid">Paid BBP Only ($1,000)</button>
+          <button class="pill-btn" data-filter="active">Active Traffic</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="table-programs">
+          <thead>
+            <tr><th>Program Handle</th><th>Type</th><th>Requests</th><th>Signals</th><th>In-Scope Assets</th><th>Action</th></tr>
+          </thead>
+          <tbody><tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading target programs...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: Vulnerability Vault -->
+  <section class="tab-pane" id="tab-vulns">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Vulnerability &amp; Signal Vault</div>
+          <div class="card-desc">Full archive of discovered anomalies, proofs of concept, and triage verdicts</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="table-vulns">
+          <thead>
+            <tr><th>Signal #</th><th>Program</th><th>Check</th><th>Severity</th><th>Asset</th><th>Stage</th></tr>
+          </thead>
+          <tbody><tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading signal archive...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 5: Live Traffic & Console -->
+  <section class="tab-pane" id="tab-live">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Live Engine Console (var/paid_run.log)</div>
+          <div class="card-desc">Instant real-time stream from the autonomous hunt daemon</div>
+        </div>
+        <div class="terminal-controls">
+          <label><input type="checkbox" id="autoscroll-chk" checked> Auto-scroll to bottom</label>
+        </div>
+      </div>
+      <pre class="terminal" id="terminal-out">Connecting to live run stream...</pre>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Recent HTTP Traffic (Last 50 Probes)</div>
+          <div class="card-desc">Active requests hitting in-scope endpoints</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="table-traffic">
+          <thead>
+            <tr><th>Status</th><th>Program</th><th>Time</th><th>Probed URL</th></tr>
+          </thead>
+          <tbody><tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Loading live requests...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
 <script>
-document.querySelectorAll('#side button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('#side button').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on');document.getElementById(b.dataset.t).classList.add('on');});
-const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-const COL={2:'#3fb950',3:'#58a6ff',4:'#d29922',5:'#f85149'};
-fetch('/api/summary').then(r=>r.json()).then(j=>{
-  const f=j.findings||{};
-  document.getElementById('kpis').innerHTML=
-    `<div class="kpi"><b>${j.total_requests}</b><small>requests sent</small></div>`+
-    `<div class="kpi"><b>${j.total_signals}</b><small>signals found</small></div>`+
-    `<div class="kpi"><b>${f.verified||0}</b><small>verified bugs</small></div>`+
-    `<div class="kpi"><b>${f.dropped||0}</b><small>dropped (noise)</small></div>`+
-    `<div class="kpi"><b>${esc(j.llm_spend||'$0')}</b><small>AI triage spend</small></div>`;
-  document.getElementById('funnel').innerHTML=
-    [`Requests<br><b>${j.total_requests}</b>`,`Signals<br><b>${j.total_signals}</b>`,
-     `Dropped<br><b>${f.dropped||0}</b>`,`Verified<br><b>${f.verified||0}</b>`,
-     `Reported<br><b>${f.reported||0}</b>`].map(s=>`<div class="fstep">${s}</div>`).join('<div class="arrow">→</div>');
-  const bc=j.by_check||{};const mx=Math.max(1,...Object.values(bc));
-  document.getElementById('bars').innerHTML=Object.entries(bc).sort((a,b)=>b[1]-a[1])
-    .map(([k,v])=>`<div class="bar-row"><div class="bar-lbl">${esc(k)}</div>`+
-    `<div class="bar" style="width:${Math.round(v/mx*400)}px"></div><div>${v}</div></div>`).join('');
-  if(j.log_tail)document.getElementById('log').textContent=j.log_tail.join('\\n');
+// Tab Switching
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const target = document.getElementById(btn.dataset.tab);
+    if (target) target.classList.add('active');
+  });
 });
-fetch('/api/traffic').then(r=>r.json()).then(t=>{
-  const sc=t.status_codes||{};const tot=Object.values(sc).reduce((a,b)=>a+b,0)||1;
-  let a0=0,svg='';
-  for(const[code,n]of Object.entries(sc).sort()){
-    const frac=n/tot,a1=a0+frac*2*Math.PI;
-    const x0=50+40*Math.cos(a0),y0=50+40*Math.sin(a0),x1=50+40*Math.cos(a1),y1=50+40*Math.sin(a1);
-    const big=frac>0.5?1:0;
-    svg+=`<path d="M50,50 L${x0.toFixed(1)},${y0.toFixed(1)} A40,40 0 ${big},1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${COL[String(code)[0]]||'#888'}"/>`;
-    a0=a1;
+
+const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const SEV_BADGE = {
+  high: 'badge badge-high',
+  medium: 'badge badge-medium',
+  low: 'badge badge-low',
+  info: 'badge badge-info'
+};
+const STATUS_COLORS = {
+  '2': '#10b981',
+  '3': '#58a6ff',
+  '4': '#d29922',
+  '5': '#ff7b72'
+};
+
+// Global Store
+let PROGRAMS = [];
+let DOM_FILTER = 'all';
+
+// 1. Instant Summary Poll (Every 2 seconds)
+async function updateSummary() {
+  try {
+    const res = await fetch('/api/summary');
+    if (!res.ok) return;
+    const data = await res.json();
+    const findings = data.findings || {};
+
+    // KPIs
+    document.getElementById('kpi-reqs').textContent = (data.total_requests || 0).toLocaleString();
+    document.getElementById('kpi-signals').textContent = (data.total_signals || 0).toLocaleString();
+    document.getElementById('kpi-verified').textContent = (findings.verified || 0).toLocaleString();
+    document.getElementById('kpi-dropped').textContent = (findings.dropped || 0).toLocaleString();
+    document.getElementById('kpi-reported').textContent = (findings.reported || 0) + ' reported to platform';
+
+    if (data.llm_spend) {
+      document.getElementById('kpi-spend').textContent = data.llm_spend;
+    }
+    if (data.last_request) {
+      document.getElementById('kpi-last-target').textContent = 'Last: ' + data.last_request.program_id;
+    }
+
+    // Funnel
+    document.getElementById('fn-reqs').textContent = (data.total_requests || 0).toLocaleString();
+    document.getElementById('fn-sigs').textContent = (data.total_signals || 0).toLocaleString();
+    document.getElementById('fn-noise').textContent = (findings.dropped || 0).toLocaleString();
+    document.getElementById('fn-ver').textContent = (findings.verified || 0).toLocaleString();
+    document.getElementById('fn-rep').textContent = (findings.reported || 0).toLocaleString();
+
+    // Check type bars
+    const bc = data.by_check || {};
+    const maxVal = Math.max(1, ...Object.values(bc));
+    const sortedChecks = Object.entries(bc).sort((a, b) => b[1] - a[1]);
+    document.getElementById('bars-view').innerHTML = sortedChecks.map(([k, v]) => `
+      <div class="bar-item">
+        <div class="bar-label" title="${esc(k)}">${esc(k)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v / maxVal * 100)}%"></div></div>
+        <div class="bar-val">${v}</div>
+      </div>
+    `).join('') || '<div style="color:var(--text-muted)">No checks recorded yet</div>';
+
+    // Last ping
+    const d = new Date();
+    document.getElementById('last-ping').textContent = d.toTimeString().split(' ')[0];
+  } catch (e) {
+    document.getElementById('live-status').textContent = 'OFFLINE';
   }
-  const leg=Object.entries(sc).sort().map(([c,n])=>
-    `<div><i style="background:${COL[String(c)[0]]||'#888'}"></i>${c}: ${n}</div>`).join('');
-  document.getElementById('donut').innerHTML=
-    `<svg width="120" height="120" viewBox="0 0 100 100">${svg}</svg><div class="legend">${leg}<div style="margin-top:6px">avg latency: ${t.avg_latency_ms} ms</div></div>`;
+}
+
+// 2. Traffic Donut & Latency (Every 3.5 seconds)
+async function updateTraffic() {
+  try {
+    const res = await fetch('/api/traffic');
+    if (!res.ok) return;
+    const t = await res.json();
+    document.getElementById('donut-latency').textContent = `Avg Latency: ${t.avg_latency_ms || 0} ms`;
+
+    const sc = t.status_codes || {};
+    const total = Object.values(sc).reduce((a, b) => a + b, 0) || 1;
+    let a0 = 0, svg = '';
+    const sorted = Object.entries(sc).sort();
+
+    for (const [code, n] of sorted) {
+      const frac = n / total;
+      const a1 = a0 + frac * 2 * Math.PI;
+      const x0 = 50 + 40 * Math.cos(a0), y0 = 50 + 40 * Math.sin(a0);
+      const x1 = 50 + 40 * Math.cos(a1), y1 = 50 + 40 * Math.sin(a1);
+      const big = frac > 0.5 ? 1 : 0;
+      const color = STATUS_COLORS[String(code)[0]] || '#888';
+      svg += `<path d="M50,50 L${x0.toFixed(1)},${y0.toFixed(1)} A40,40 0 ${big},1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${color}"/>`;
+      a0 = a1;
+    }
+
+    const legend = sorted.map(([c, n]) => `
+      <div class="legend-row">
+        <div class="legend-dot" style="background:${STATUS_COLORS[String(c)[0]] || '#888'}"></div>
+        <span style="font-family:var(--font-mono)">${c}</span>: <b>${n.toLocaleString()}</b>
+        <span style="color:var(--text-muted)">(${Math.round(n / total * 100)}%)</span>
+      </div>
+    `).join('');
+
+    document.getElementById('donut-view').innerHTML = `
+      <svg width="120" height="120" viewBox="0 0 100 100">${svg}</svg>
+      <div class="donut-legend">${legend}</div>
+    `;
+  } catch (e) {}
+}
+
+// 3. Live Console Streaming (Every 1.5 seconds)
+async function updateConsole() {
+  try {
+    const res = await fetch('/api/log');
+    if (!res.ok) return;
+    const d = await res.json();
+    const term = document.getElementById('terminal-out');
+    const autoScroll = document.getElementById('autoscroll-chk').checked;
+    if (d.lines && d.lines.length) {
+      term.textContent = d.lines.join('\\n');
+      if (autoScroll) {
+        term.scrollTop = term.scrollHeight;
+      }
+    }
+  } catch (e) {}
+}
+
+// 4. Recent Requests (Every 2.5 seconds)
+async function updateRecent() {
+  try {
+    const res = await fetch('/api/recent');
+    if (!res.ok) return;
+    const rows = await res.json();
+    const tbody = document.querySelector('#table-traffic tbody');
+    tbody.innerHTML = rows.slice(0, 50).map(r => {
+      const code = r.status || '?';
+      const col = STATUS_COLORS[String(code)[0]] || '#888';
+      return `
+        <tr>
+          <td><span class="badge" style="background:${col}22;color:${col}">${code}</span></td>
+          <td><b>${esc(r.program_id)}</b></td>
+          <td style="color:var(--text-muted);font-family:var(--font-mono)">${esc(r.ts ? r.ts.split('T')[1] : '')}</td>
+          <td style="max-width:550px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono)" title="${esc(r.url)}">${esc(r.url)}</td>
+        </tr>
+      `;
+    }).join('') || '<tr><td colspan="4">No requests logged yet</td></tr>';
+  } catch (e) {}
+}
+
+// 5. Signals & Triage (Every 4 seconds)
+async function updateSignals() {
+  try {
+    const res = await fetch('/api/signals');
+    if (!res.ok) return;
+    const s = await res.json();
+
+    const renderRows = list => list.map(x => {
+      const sev = (x.severity_hint || 'info').toLowerCase();
+      const badgeCls = SEV_BADGE[sev] || SEV_BADGE.info;
+      return `
+        <tr>
+          <td style="font-family:var(--font-mono)">#${x.id}</td>
+          <td><b>${esc(x.program_id)}</b></td>
+          <td style="font-family:var(--font-mono)">${esc(x.check_id)}</td>
+          <td><span class="${badgeCls}">${esc(sev)}</span></td>
+          <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono)" title="${esc(x.asset)}">${esc(x.asset)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    document.querySelector('#table-actionable tbody').innerHTML =
+      renderRows(s.actionable.slice(0, 40)) || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Zero actionable signals pending</td></tr>';
+
+    document.querySelector('#table-vulns tbody').innerHTML =
+      renderRows(s.actionable.slice(0, 80)) || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Vault empty</td></tr>';
+  } catch (e) {}
+}
+
+// 6. Programs & Scope Map (Load once + search/filter)
+async function loadPrograms() {
+  try {
+    const res = await fetch('/api/programs');
+    if (!res.ok) return;
+    PROGRAMS = await res.json();
+    renderPrograms();
+  } catch (e) {}
+}
+
+function renderPrograms() {
+  const query = (document.getElementById('dom-search').value || '').toLowerCase().trim();
+  const rows = PROGRAMS.filter(p => {
+    if (DOM_FILTER === 'paid' && !p.max_bounty) return false;
+    if (DOM_FILTER === 'active' && (!p.request_count || p.request_count === 0)) return false;
+    if (!query) return true;
+    const inScope = (p.includes || []).join(' ').toLowerCase();
+    return p.id.toLowerCase().includes(query) || inScope.includes(query);
+  });
+
+  const tbody = document.querySelector('#table-programs tbody');
+  tbody.innerHTML = rows.slice(0, 100).map(p => {
+    const isPaid = !!p.max_bounty;
+    const badge = isPaid
+      ? `<span class="badge badge-paid">PAID $${p.max_bounty}</span>`
+      : `<span class="badge badge-vdp">VDP</span>`;
+    const scopePreview = (p.includes || []).slice(0, 3).join(', ') || 'Wildcard / API';
+    return `
+      <tr>
+        <td><b>${esc(p.id)}</b></td>
+        <td>${badge}</td>
+        <td><b style="color:var(--text-primary)">${p.request_count || 0}</b></td>
+        <td>${p.signal_count ? `<span class="badge badge-medium">${p.signal_count}</span>` : '0'}</td>
+        <td style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);color:var(--text-muted)" title="${esc(scopePreview)}">${esc(scopePreview)}</td>
+        <td><a href="${esc(p.url || '#')}" target="_blank" rel="noopener">Open Scope ↗</a></td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">No matching programs found</td></tr>';
+}
+
+// Search and Filter Listeners
+document.getElementById('dom-search').addEventListener('input', renderPrograms);
+document.querySelectorAll('.filter-pills .pill-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-pills .pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    DOM_FILTER = btn.dataset.filter;
+    renderPrograms();
+  });
 });
-let DOMS=[];
-fetch('/api/programs').then(r=>r.json()).then(p=>{
-  DOMS=p;
-  const render=q=>{
-    const rows=p.filter(d=>!q||d.id.includes(q)||(d.includes||[]).join(' ').includes(q)).slice(0,120);
-    document.getElementById('dom-list').innerHTML=
-      `<p style="color:#8b949e;margin-bottom:8px">${p.length} programs, showing ${rows.length}</p>`+
-      `<table><tr><th>Program</th><th>Bounty</th><th>Reqs</th><th>Signals</th><th>Scope</th></tr>`+
-      rows.map(d=>`<tr><td><a href="${esc(d.url||'#')}" target="_blank">${esc(d.id)}</a></td>`+
-      `<td>${d.max_bounty?'<span class="badge paid">PAID</span>':'<span class="badge vdp">VDP</span>'}</td>`+
-      `<td>${d.request_count}</td><td>${d.signal_count}</td>`+
-      `<td>${esc((d.includes||[]).slice(0,3).join(', '))}</td></tr>`).join('')+`</table>`;
-  };
-  render('');
-  document.getElementById('domq').oninput=e=>render(e.target.value.toLowerCase());
-});
-fetch('/api/signals').then(r=>r.json()).then(s=>{
-  const sev=c=>c.includes('high')?'sev-high':c.includes('medium')?'sev-medium':c.includes('low')?'sev-low':'sev-info';
-  const row=x=>`<tr><td>#${x.id}</td><td>${esc(x.program_id)}</td>`+
-    `<td>${esc(x.check_id)}</td><td><span class="badge ${sev(x.severity_hint||'info')}">${esc(x.severity_hint||'?')}</span></td>`+
-    `<td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.asset)}">${esc(x.asset)}</td></tr>`;
-  document.getElementById('good-list').innerHTML=
-    `<p style="color:#8b949e">${s.actionable.length} actionable</p><table>`+
-    s.actionable.slice(0,60).map(row).join('')+`</table>`;
-  document.getElementById('vuln-list').innerHTML=
-    `<p style="color:#8b949e">${s.actionable.length} actionable / ${s.noise.length} noise</p><table>`+
-    s.actionable.slice(0,100).map(row).join('')+`</table>`;
-});
-fetch('/api/recent').then(r=>r.json()).then(t=>{
-  document.getElementById('traffic').innerHTML=`<table>`+
-    t.slice(0,50).map(x=>`<tr><td>${x.status||'?'}</td><td>${esc(x.program_id)}</td>`+
-    `<td style="max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.url)}">${esc(x.url)}</td></tr>`).join('')+`</table>`;
-});
-setInterval(()=>{fetch('/api/summary').then(r=>r.json()).then(j=>{
-  if(j.log_tail)document.getElementById('log').textContent=j.log_tail.join('\\n');});},8000);
+
+// Initial boot
+updateSummary();
+updateTraffic();
+updateConsole();
+updateRecent();
+updateSignals();
+loadPrograms();
+
+// Direct instant update timers (No whole-page reload)
+setInterval(updateSummary, 2000);
+setInterval(updateConsole, 1500);
+setInterval(updateRecent, 2500);
+setInterval(updateTraffic, 3500);
+setInterval(updateSignals, 4500);
+setInterval(loadPrograms, 30000);
 </script>
-</body></html>"""
+</body>
+</html>"""
 
 
 def _ro(path: str) -> sqlite3.Connection:
