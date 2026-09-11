@@ -42,12 +42,22 @@ def _crowded_program_ids(conn: sqlite3.Connection) -> set[str]:
     return {r["program_id"] for r in rows}
 
 
+def _probed_program_ids(conn: sqlite3.Connection) -> set[str]:
+    # ponytail: full scan on request_log; index or aggregate table if DB exceeds 100k rows
+    try:
+        rows = conn.execute("SELECT DISTINCT program_id FROM request_log").fetchall()
+        return {r["program_id"] for r in rows if r["program_id"]}
+    except sqlite3.OperationalError:
+        return set()
+
+
 def pick_targets(conn: sqlite3.Connection, cfg, weights: dict[str, float],
                  k: int | None = None,
                  include_simulator: bool = False) -> list[dict]:
     """Top-k programs to hunt tonight, normalized for the probing stage."""
     k = k or cfg["selection.max_targets_per_night"]
     crowded = _crowded_program_ids(conn)
+    probed = _probed_program_ids(conn)
     scored: list[tuple[float, dict]] = []
     for row in conn.execute("SELECT * FROM programs").fetchall():
         p = dict(row)
@@ -64,6 +74,9 @@ def pick_targets(conn: sqlite3.Connection, cfg, weights: dict[str, float],
                 "policy_text": p["policy_text"],
                 "includes": scope.get("includes", []),
                 "excludes": scope.get("excludes", [])}
-        scored.append((target_score(norm, weights, cfg), norm))
+        score = target_score(norm, weights, cfg)
+        if p["id"] not in probed:
+            score += 10.0
+        scored.append((score, norm))
     scored.sort(key=lambda t: -t[0])
     return [p for _, p in scored[:k]]

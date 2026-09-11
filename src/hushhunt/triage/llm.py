@@ -48,6 +48,15 @@ class LlmClient:
         return prompt_toks / 1e6 * pair[0] + completion_toks / 1e6 * pair[1]
 
     def complete_json(self, system: str, user: str) -> dict:
+        last: Exception | None = None
+        for _ in range(2):
+            try:
+                return self._complete_once(system, user)
+            except TriageContractError as e:
+                last = e
+        raise last  # type: ignore[misc]
+
+    def _complete_once(self, system: str, user: str) -> dict:
         r = httpx.post(
             self.cfg["llm.base_url"].rstrip("/") + "/chat/completions",
             headers={"Authorization": f"Bearer {self.cfg.secret('HH_LLM_API_KEY')}"},

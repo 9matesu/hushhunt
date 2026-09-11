@@ -62,3 +62,15 @@ def test_pick_targets_respects_k_and_skips_crowded(tmp_path):
     assert ids[0] == "h1:good"
     assert picks[0]["includes"] == ["a.example"]
     assert len(pick_targets(conn, CFG, {}, k=1)) == 1
+
+
+def test_pick_targets_prefers_unprobed(tmp_path):
+    conn = open_db(tmp_path / "t2.db")
+    upsert_program(conn, _prog("h1:probed", 500, 10))
+    upsert_program(conn, _prog("h1:fresh", 500, 10))
+    conn.execute(
+        "INSERT INTO request_log(program_id,ts,url,method,status,ms) "
+        "VALUES('h1:probed','t','http://a.example/','GET',200,1)")
+    conn.commit()
+    picks = pick_targets(conn, CFG, {}, k=2)
+    assert [p["id"] for p in picks] == ["h1:fresh", "h1:probed"]
