@@ -1,6 +1,13 @@
 import json
 import urllib.request
-from hushhunt.dashboard import query_summary, run_server
+import threading
+from hushhunt.dashboard import (
+    query_summary,
+    query_programs,
+    query_signals_categorized,
+    query_traffic_stats,
+    run_server,
+)
 from hushhunt.db import open_db
 
 
@@ -16,8 +23,64 @@ def test_query_summary_counts(tmp_path):
     assert ro["by_check"] == {"cors_misconfig": 1}
 
 
-def test_api_summary_serves_json(tmp_path):
-    import threading
+def test_query_programs_includes_scope_and_bounty(tmp_path):
+    conn = open_db(tmp_path / "p.db")
+    conn.execute(
+        "INSERT INTO programs(id,platform,name,url,max_bounty,scope_json) "
+        "VALUES('h1:test','h1','Test Program','http://x/',1000,?)",
+        (json.dumps({"includes": ["api.test.com", "*.test.com"]}),)
+    )
+    conn.execute(
+        "INSERT INTO request_log(program_id,ts,url,method,status,ms) "
+        "VALUES('h1:test','2026-09-11T12:00:00','http://api.test.com/','GET',200,50)"
+    )
+    conn.commit()
+    
+    progs = query_programs(str(tmp_path / "p.db"))
+    assert len(progs) == 1
+    assert progs[0]["id"] == "h1:test"
+    assert progs[0]["max_bounty"] == 1000
+    assert "api.test.com" in progs[0]["includes"]
+    assert progs[0]["request_count"] == 1
+
+
+def test_query_signals_categorizes_good_vs_bad(tmp_path):
+    conn = open_db(tmp_path / "sig.db")
+    # Bad info (noise)
+    conn.execute(
+        "INSERT INTO signals(id,program_id,asset,check_id,severity_hint,payload_json) "
+        "VALUES(1,'p1','https://a/','passive_headers','info','{}')"
+    )
+    # Good info (actionable potential bug)
+    conn.execute(
+        "INSERT INTO signals(id,program_id,asset,check_id,severity_hint,payload_json) "
+        "VALUES(2,'p1','https://a/','cors_misconfig','medium','{\"acac\":\"true\"}')"
+    )
+    conn.commit()
+
+    data = query_signals_categorized(str(tmp_path / "sig.db"))
+    assert len(data["actionable"]) == 1
+    assert data["actionable"][0]["check_id"] == "cors_misconfig"
+    assert len(data["noise"]) == 1
+    assert data["noise"][0]["check_id"] == "passive_headers"
+
+
+def test_query_traffic_stats(tmp_path):
+    conn = open_db(tmp_path / "tr.db")
+    for st in (200, 200, 404, 403, 500):
+        conn.execute(
+            "INSERT INTO request_log(program_id,ts,url,method,status,ms) "
+            f"VALUES('p1','2026-09-11T12:00:00','http://x/','GET',{st},10)"
+        )
+    conn.commit()
+
+    stats = query_traffic_stats(str(tmp_path / "tr.db"))
+    assert stats["status_codes"][200] == 2
+    assert stats["status_codes"][404] == 1
+    assert stats["status_codes"][500] == 1
+
+
+def test_api_routes_serve_json(tmp_path):
     conn = open_db(tmp_path / "s.db")
     conn.execute("INSERT INTO programs(id,platform,name,url) VALUES('p1','h1','P1','http://x/')")
     conn.commit()
@@ -25,10 +88,15 @@ def test_api_summary_serves_json(tmp_path):
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/summary", timeout=5) as r:
-            body = json.load(r)
-        assert body["total_requests"] == 0
-        assert "by_check" in body
+        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent"):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}{ep}", timeout=5) as r:
+                assert r.status == 200
+                data = json.load(r)
+                assert isinstance(data, (dict, list))
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5) as r:
+            assert r.status == 200
+            content = r.read().decode("utf-8")
+            assert "<!doctype html>" in content.lower()
     finally:
         srv.shutdown()
         srv.server_close()
