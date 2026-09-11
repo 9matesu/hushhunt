@@ -4,6 +4,7 @@ import threading
 from hushhunt.dashboard import (
     query_api_routes,
     query_programs,
+    query_reasoning,
     query_recent,
     query_signals_categorized,
     query_summary,
@@ -106,6 +107,33 @@ def test_query_verified_findings_with_report(tmp_path):
     assert "alert(1)" in findings[0]["report_text"]
 
 
+def test_query_reasoning_returns_planner_and_triage(tmp_path):
+    conn = open_db(tmp_path / "r.db")
+    conn.execute(
+        "INSERT INTO planner_decisions(program_id, module, url, param, why, verdict, created_at) "
+        "VALUES('target:p1', 'sqli', 'http://x/api/user', 'id', 'Numeric id parameter unsanitized', 'approved', '2026-09-11T15:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO signals(id, program_id, asset, check_id, payload_json) "
+        "VALUES(50, 'target:p1', 'http://x/login', 'cors_misconfig', '{}')"
+    )
+    conn.execute(
+        "INSERT INTO findings(id, signal_id, stage, confidence, detail_json, updated_at) "
+        "VALUES(1, 50, 'triaged', 0.9, ?, '2026-09-11T15:05:00')",
+        (json.dumps({"reasoning": "Reflected Origin header with credentials enabled"}),)
+    )
+    conn.commit()
+
+    reasons = query_reasoning(str(tmp_path / "r.db"))
+    assert len(reasons) == 2
+    sources = {r["source"] for r in reasons}
+    assert sources == {"planner", "triage"}
+    p = next(r for r in reasons if r["source"] == "planner")
+    assert "unsanitized" in p["rationale"]
+    t = next(r for r in reasons if r["source"] == "triage")
+    assert "Reflected Origin" in t["rationale"]
+
+
 def test_api_routes_serve_json(tmp_path):
     conn = open_db(tmp_path / "s.db")
     conn.execute("INSERT INTO programs(id,platform,name,url) VALUES('p1','h1','P1','http://x/')")
@@ -114,7 +142,7 @@ def test_api_routes_serve_json(tmp_path):
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:
-        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent", "/api/verified", "/api/api-routes"):
+        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent", "/api/verified", "/api/api-routes", "/api/reasoning"):
             with urllib.request.urlopen(f"http://127.0.0.1:{port}{ep}", timeout=5) as r:
                 assert r.status == 200
                 data = json.load(r)

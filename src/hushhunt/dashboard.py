@@ -1144,6 +1144,61 @@ def query_recent(db_path: str, limit: int = 20) -> list[dict]:
 
 
 # ponytail: full-table GROUP BY scans; add index on request_log(program_id) past ~500k rows
+def query_reasoning(db_path: str, limit: int = 100) -> list[dict]:
+    """Return recent AI pentest decisions: planner rationale + triage reasoning."""
+    conn = _ro(db_path)
+    out: list[dict] = []
+    try:
+        try:
+            p_rows = conn.execute(
+                "SELECT program_id, module, url, param, why, verdict, created_at "
+                "FROM planner_decisions ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            for r in p_rows:
+                out.append({
+                    "timestamp": r["created_at"] or "",
+                    "source": "planner",
+                    "program_id": r["program_id"] or "",
+                    "target": f"{r['url'] or ''} [{r['param'] or ''}]".strip(),
+                    "action": f"Test {r['module'] or ''}",
+                    "verdict": r["verdict"] or "",
+                    "rationale": r["why"] or "",
+                })
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            f_rows = conn.execute(
+                "SELECT f.id, f.signal_id, f.stage, f.confidence, f.detail_json, f.updated_at, "
+                "s.program_id, s.check_id, s.asset "
+                "FROM findings f LEFT JOIN signals s ON s.id = f.signal_id "
+                "ORDER BY f.id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            for r in f_rows:
+                try:
+                    det = json.loads(r["detail_json"] or "{}")
+                except Exception:
+                    det = {}
+                why = det.get("reasoning") or det.get("why") or det.get("reason") or ""
+                if why:
+                    out.append({
+                        "timestamp": r["updated_at"] or "",
+                        "source": "triage",
+                        "program_id": r["program_id"] or "",
+                        "target": r["asset"] or "",
+                        "action": f"Triage {r['check_id'] or ''}",
+                        "verdict": f"{r['stage']} ({int((r['confidence'] or 0)*100)}%)",
+                        "rationale": why,
+                    })
+        except sqlite3.OperationalError:
+            pass
+    finally:
+        conn.close()
+
+    out.sort(key=lambda x: x["timestamp"], reverse=True)
+    return out[:limit]
+
+
 def query_api_routes(db_path: str, limit: int = 100) -> list[dict]:
     """Return API routes auto-discovered from OpenAPI/Swagger/GraphQL schemas."""
     conn = _ro(db_path)
@@ -1326,6 +1381,8 @@ def run_server(db_path: str, log_path: str | None, port: int = 8765):
                 self._json(query_verified_findings(db))
             elif self.path == "/api/api-routes":
                 self._json(query_api_routes(db))
+            elif self.path == "/api/reasoning":
+                self._json(query_reasoning(db))
             else:
                 self.send_response(404)
                 self.end_headers()
