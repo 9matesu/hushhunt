@@ -59,8 +59,11 @@ def main(argv=None) -> int:
     und = sub.add_parser("undemote", help="manually re-enable a demoted module")
     und.add_argument("--root", default=".")
     und.add_argument("module")
+    audit_cmd = sub.add_parser("local-audit", help="run defensive SSH or AD baseline audit")
+    audit_cmd.add_argument("--sshd-config", help="path to sshd_config")
+    audit_cmd.add_argument("--ad-policy", help="path to JSON AD policy dump")
     args = ap.parse_args(argv)
-    cfg = _load_cfg(args.root)
+    cfg = _load_cfg(getattr(args, "root", "."))
     if args.cmd == "run-autonomous":
         if getattr(args, "sim", False):
             from .sim import run_sim
@@ -171,6 +174,19 @@ def main(argv=None) -> int:
         undemote(conn, args.module)
         print(f"UNDEMOTED {args.module}")
         return 0
+    if args.cmd == "local-audit":
+        from .local_audit import audit_ad_policy, audit_sshd_config
+        import json
+        import pathlib
+        findings = []
+        if args.sshd_config:
+            text = pathlib.Path(args.sshd_config).read_text(encoding="utf-8")
+            findings.extend(audit_sshd_config(text))
+        if args.ad_policy:
+            data = json.loads(pathlib.Path(args.ad_policy).read_text(encoding="utf-8"))
+            findings.extend(audit_ad_policy(data))
+        print(json.dumps({"findings_count": len(findings), "findings": findings}, indent=2))
+        return 0 if not findings else 2
     return 1
 
 
