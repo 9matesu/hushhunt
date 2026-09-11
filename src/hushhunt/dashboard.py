@@ -486,6 +486,10 @@ a:hover { text-decoration: underline; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
       Vulnerability Vault
     </button>
+    <button class="nav-btn" data-tab="tab-bugs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M8 12l2 2 4-5"></path></svg>
+      Verified Bugs &amp; Reports
+    </button>
     <button class="nav-btn" data-tab="tab-live">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
       Live Traffic &amp; Console
@@ -709,6 +713,35 @@ a:hover { text-decoration: underline; }
           </thead>
           <tbody><tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Loading signal archive...</td></tr></tbody>
         </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB: Verified Bugs & Reports -->
+  <section class="tab-pane" id="tab-bugs">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Verified Vulnerabilities &amp; Submission Reports</div>
+          <div class="card-desc">High-confidence findings confirmed exploitable with evidence and submission-ready markdown reports</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start;">
+        <!-- Left: List of Verified Bugs -->
+        <div id="verified-cards" style="display:flex;flex-direction:column;gap:12px;">
+          <div style="color:var(--text-muted)">Loading verified findings...</div>
+        </div>
+        <!-- Right: Report Viewer -->
+        <div class="card" style="margin-bottom:0;background:#050607;border:1px solid var(--border-subtle);min-height:500px;display:flex;flex-direction:column;">
+          <div class="card-header" style="border-bottom:1px solid var(--border-subtle);padding-bottom:12px;margin-bottom:14px;">
+            <div>
+              <div class="card-title" id="rep-viewer-title">Select a verified finding</div>
+              <div class="card-desc" id="rep-viewer-meta">Proof of Concept and submission report</div>
+            </div>
+            <button class="pill-btn" id="rep-copy-btn" style="display:none" onclick="copyActiveReport()">Copy Report</button>
+          </div>
+          <pre id="rep-viewer-body" style="font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#c9d1d9;white-space:pre-wrap;overflow-y:auto;max-height:600px;flex:1;">Click any verified bug on the left to inspect its proof of concept, reproduction steps, and generated bounty report.</pre>
+        </div>
       </div>
     </div>
   </section>
@@ -985,12 +1018,82 @@ document.querySelectorAll('.filter-pills .pill-btn').forEach(btn => {
   });
 });
 
+// 7. Verified Bugs & Reports
+let VERIFIED_FINDINGS = [];
+let ACTIVE_REPORT_TEXT = "";
+
+async function updateVerified() {
+  try {
+    const res = await fetch('/api/verified');
+    if (!res.ok) return;
+    VERIFIED_FINDINGS = await res.json();
+    renderVerified();
+  } catch (e) {}
+}
+
+function renderVerified() {
+  const container = document.getElementById('verified-cards');
+  if (!container) return;
+  if (!VERIFIED_FINDINGS.length) {
+    container.innerHTML = '<div style="color:var(--text-muted);padding:14px;background:rgba(255,255,255,0.02);border-radius:6px;">No verified vulnerabilities logged yet.</div>';
+    return;
+  }
+  container.innerHTML = VERIFIED_FINDINGS.map((f, idx) => {
+    const sev = (f.severity_hint || 'high').toLowerCase();
+    const badge = SEV_BADGE[sev] || SEV_BADGE.high;
+    const stageBadge = f.stage === 'reported' ? 'badge badge-paid' : 'badge badge-low';
+    return `
+      <div class="card" style="padding:14px;cursor:pointer;transition:all 0.15s;" onclick="selectReport(${idx})" id="vcard-${f.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <b style="color:var(--text-primary);font-size:13px;">${esc(f.program_id)}</b>
+          <div>
+            <span class="${badge}">${esc(sev)}</span>
+            <span class="${stageBadge}">${esc(f.stage)}</span>
+          </div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--accent-violet);margin-bottom:4px;">${esc(f.check_id)}</div>
+        <div style="color:var(--text-muted);font-size:11px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);">${esc(f.asset)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--text-muted);">
+          <span>Confidence: <b>${Math.round((f.confidence || 1.0) * 100)}%</b></span>
+          <span style="color:var(--accent-violet);font-weight:600;">View Report ↗</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectReport(idx) {
+  const f = VERIFIED_FINDINGS[idx];
+  if (!f) return;
+  document.querySelectorAll('#verified-cards .card').forEach(c => c.style.borderColor = 'var(--border-subtle)');
+  const activeCard = document.getElementById('vcard-' + f.id);
+  if (activeCard) activeCard.style.borderColor = 'var(--accent-violet)';
+
+  document.getElementById('rep-viewer-title').textContent = `${f.check_id} — ${f.program_id}`;
+  document.getElementById('rep-viewer-meta').textContent = `${f.stage.toUpperCase()} | Confidence: ${Math.round((f.confidence||1)*100)}% | Updated: ${f.updated_at || 'Recently'}`;
+  
+  ACTIVE_REPORT_TEXT = f.report_text || f.fallback_text || "No report markdown generated for this finding yet.";
+  document.getElementById('rep-viewer-body').textContent = ACTIVE_REPORT_TEXT;
+  document.getElementById('rep-copy-btn').style.display = 'inline-block';
+}
+
+function copyActiveReport() {
+  if (!ACTIVE_REPORT_TEXT) return;
+  navigator.clipboard.writeText(ACTIVE_REPORT_TEXT).then(() => {
+    const btn = document.getElementById('rep-copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
 // Initial boot
 updateSummary();
 updateTraffic();
 updateConsole();
 updateRecent();
 updateSignals();
+updateVerified();
 loadPrograms();
 
 // Direct instant update timers (No whole-page reload)
@@ -999,6 +1102,7 @@ setInterval(updateConsole, 1500);
 setInterval(updateRecent, 2500);
 setInterval(updateTraffic, 3500);
 setInterval(updateSignals, 4500);
+setInterval(updateVerified, 4000);
 setInterval(loadPrograms, 30000);
 </script>
 </body>
@@ -1112,6 +1216,44 @@ def query_traffic_stats(db_path: str) -> dict:
         conn.close()
 
 
+def query_verified_findings(db_path: str) -> list[dict]:
+    """Return verified/reported findings with joined signal context and report markdown text."""
+    conn = _ro(db_path)
+    try:
+        rows = conn.execute(
+            """SELECT f.id, f.signal_id, f.stage, f.confidence, f.report_path, f.outcome, f.updated_at,
+                      s.program_id, s.asset, s.check_id, s.wstg, s.severity_hint
+               FROM findings f
+               LEFT JOIN signals s ON s.id = f.signal_id
+               WHERE f.stage IN ('verified', 'reported')
+               ORDER BY f.id DESC""",
+        ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            item = dict(r)
+            text: str | None = None
+            rp = item.get("report_path")
+            if rp:
+                try:
+                    text = pathlib.Path(rp).read_text(encoding="utf-8")[:20000]
+                except OSError:
+                    text = None
+            item["report_text"] = text
+            if text is None:
+                item["fallback_text"] = (
+                    f"**Title:** {item.get('check_id')} on {item.get('asset')}\n\n"
+                    f"**Program:** {item.get('program_id')}\n"
+                    f"**Stage:** {item.get('stage')} (confidence {item.get('confidence')})\n"
+                    f"**Severity:** {item.get('severity_hint')}\n\n"
+                    f"No markdown report file was generated for this finding yet. "
+                    f"Use the evidence in var/evidence/ for manual triage."
+                )
+            out.append(item)
+        return out
+    finally:
+        conn.close()
+
+
 def run_server(db_path: str, log_path: str | None, port: int = 8765):
     db, log = db_path, log_path
 
@@ -1168,6 +1310,8 @@ def run_server(db_path: str, log_path: str | None, port: int = 8765):
                     except OSError:
                         pass
                 self._json({"lines": lines})
+            elif self.path == "/api/verified":
+                self._json(query_verified_findings(db))
             else:
                 self.send_response(404)
                 self.end_headers()

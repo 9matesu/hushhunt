@@ -6,6 +6,7 @@ from hushhunt.dashboard import (
     query_programs,
     query_signals_categorized,
     query_traffic_stats,
+    query_verified_findings,
     run_server,
 )
 from hushhunt.db import open_db
@@ -80,6 +81,29 @@ def test_query_traffic_stats(tmp_path):
     assert stats["status_codes"][500] == 1
 
 
+def test_query_verified_findings_with_report(tmp_path):
+    conn = open_db(tmp_path / "v.db")
+    report_file = tmp_path / "rep1.md"
+    report_file.write_text("**Title:** XSS on test\n## PoC\nalert(1)")
+    conn.execute(
+        "INSERT INTO signals(id,program_id,asset,check_id,severity_hint) "
+        "VALUES(10,'target:app','https://app.test/vuln','xss_reflected','high')"
+    )
+    conn.execute(
+        "INSERT INTO findings(id,signal_id,stage,confidence,report_path,updated_at) "
+        "VALUES(1,10,'verified',0.95,?, '2026-09-11T14:00:00')",
+        (str(report_file),)
+    )
+    conn.commit()
+
+    findings = query_verified_findings(str(tmp_path / "v.db"))
+    assert len(findings) == 1
+    assert findings[0]["stage"] == "verified"
+    assert findings[0]["program_id"] == "target:app"
+    assert findings[0]["check_id"] == "xss_reflected"
+    assert "alert(1)" in findings[0]["report_text"]
+
+
 def test_api_routes_serve_json(tmp_path):
     conn = open_db(tmp_path / "s.db")
     conn.execute("INSERT INTO programs(id,platform,name,url) VALUES('p1','h1','P1','http://x/')")
@@ -88,7 +112,7 @@ def test_api_routes_serve_json(tmp_path):
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:
-        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent"):
+        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent", "/api/verified"):
             with urllib.request.urlopen(f"http://127.0.0.1:{port}{ep}", timeout=5) as r:
                 assert r.status == 200
                 data = json.load(r)
