@@ -29,6 +29,7 @@ import hushhunt.checks.active.graphql    # noqa: F401
 import hushhunt.checks.active.blind      # noqa: F401
 import hushhunt.checks.active.cmdinject  # noqa: F401
 import hushhunt.checks.active.nuclei_check  # noqa: F401
+import hushhunt.checks.active.actuator  # noqa: F401
 import hushhunt.checks.active.massassign  # noqa: F401
 from .checks.active import ACTIVE_MODULES
 from .crawl import crawl
