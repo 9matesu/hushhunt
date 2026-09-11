@@ -40,7 +40,7 @@ def test_crawl_respects_robots_and_collects_params(tmp_path):
     assert ("/item", "id") in params
     urls = [r["url"] for r in conn.execute("SELECT url FROM request_log")]
     assert not [u for u in urls if "/private/" in u]   # robots honored
-    assert len(urls) <= 11                              # budget respected
+    assert len(urls) <= 20                              # budget respected (+api schema probes)
     assert any(u.endswith("/robots.txt") for u in urls)
 
 

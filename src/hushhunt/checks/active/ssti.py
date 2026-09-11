@@ -21,7 +21,10 @@ def check_ssti(ctx) -> list[dict]:
     """Arithmetic canaries only ({{7*7}}->49). Signal iff the evaluated form
     appears for the probe AND the same digits are absent in the baseline
     response — template engines that evaluate but the app never echoes the
-    number produce no FP. No RCE-syntax probes ({}|system etc.) — policy."""
+    number produce no FP. No RCE-syntax probes ({}|system etc.) — policy.
+
+    Covers BOTH: URL query params (GET) and JSON body params (POST under a
+    probe grant, for openapi_post-sourced params)."""
     if ctx.fetch is None or not getattr(ctx, "params", None):
         return []
     out, seen = [], set()
@@ -42,11 +45,23 @@ def check_ssti(ctx) -> list[dict]:
                 r = ctx.fetch(purl)
             except Exception:
                 break
-            if "49" in re.sub(r"\s", "", r.text):
+            r_nodash = re.sub(r"\s", "", r.text)
+            if "49" in r_nodash and probe not in r.text:
                 out.append({"check_id": "ssti", "asset": purl,
                             "severity_hint": "high",
                             "payload": {"param": param, "probe": probe}})
                 break
+        if ctx.post and getattr(ctx, "grant_id", None):
+            for probe in PROBES:
+                try:
+                    r_post = ctx.post(url, json_body={param: probe}, grant_id=ctx.grant_id)
+                    if "49" in re.sub(r"\s", "", r_post.text) and probe not in r_post.text:
+                        out.append({"check_id": "ssti", "asset": url,
+                                    "severity_hint": "high",
+                                    "payload": {"param": param, "probe": probe, "format": "json"}})
+                        break
+                except Exception:
+                    pass
     return out
 
 

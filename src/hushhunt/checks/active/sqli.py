@@ -54,6 +54,20 @@ def check_sqli_error(ctx) -> list[dict]:
                                         "fingerprint": DB_ERRORS.search(r.text)
                                         .group(0)[:60]}})
                 break
+        if ctx.post and getattr(ctx, "grant_id", None):
+            for probe in PROBES:
+                try:
+                    r_post = ctx.post(url, json_body={param: probe}, grant_id=ctx.grant_id)
+                    if DB_ERRORS.search(r_post.text):
+                        out.append({"check_id": "sqli_error", "asset": url,
+                                    "severity_hint": "high",
+                                    "payload": {"param": param, "probe": probe,
+                                                "format": "json",
+                                                "fingerprint": DB_ERRORS.search(r_post.text)
+                                                .group(0)[:60]}})
+                        break
+                except Exception:
+                    pass
     return out
 
 

@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
+from .api_miner import probe_api_schemas
 from .http import BudgetExceeded, HardenedClient, OutOfScope
 from .scope import url_in_scope
 
@@ -91,5 +92,26 @@ def crawl(cfg, conn, program: dict, transport=None,
             child = urljoin(norm, html.unescape(href))
             if urlparse(child).netloc == base.netloc and allowed(child):
                 queue.append(child)
+    # --- API schema discovery: unlock REST/GraphQL attack surface ---
+    for base in starts:
+        if not allowed(base):
+            continue
+        try:
+            api_results = probe_api_schemas(hc, base)
+        except (OutOfScope, BudgetExceeded, httpx.HTTPError):
+            continue
+        for route in api_results.get("openapi_routes", []):
+            rpath = route.get("path", "")
+            method = str(route.get("method", "GET")).lower()
+            full_url = urljoin(base, rpath.lstrip("/")) if rpath.startswith("/") else base.rstrip("/") + "/" + rpath
+            if not allowed(full_url):
+                continue
+            for param in route.get("params", []):
+                conn.execute(
+                    "INSERT OR IGNORE INTO params_seen(program_id,url,param,source,"
+                    "sample_url,sample_value) VALUES(?,?,?,?,?,?)",
+                    (program["id"], urlparse(full_url).path, param, f"openapi_{method}",
+                     full_url, "test"))
+                params_n += 1
     conn.commit()
     return {"pages": pages, "params": params_n}

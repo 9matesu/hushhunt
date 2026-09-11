@@ -1144,6 +1144,18 @@ def query_recent(db_path: str, limit: int = 20) -> list[dict]:
 
 
 # ponytail: full-table GROUP BY scans; add index on request_log(program_id) past ~500k rows
+def query_api_routes(db_path: str, limit: int = 100) -> list[dict]:
+    """Return API routes auto-discovered from OpenAPI/Swagger/GraphQL schemas."""
+    conn = _ro(db_path)
+    try:
+        return [dict(r) for r in conn.execute(
+            "SELECT program_id, url, param, source, sample_url FROM params_seen "
+            "WHERE source LIKE 'openapi%' OR source LIKE '%json%' OR source LIKE '%graphql%' "
+            "ORDER BY rowid DESC LIMIT ?", (limit,))]
+    finally:
+        conn.close()
+
+
 def query_programs(db_path: str, limit: int = 500) -> list[dict]:
     conn = _ro(db_path)
     try:
@@ -1312,6 +1324,8 @@ def run_server(db_path: str, log_path: str | None, port: int = 8765):
                 self._json({"lines": lines})
             elif self.path == "/api/verified":
                 self._json(query_verified_findings(db))
+            elif self.path == "/api/api-routes":
+                self._json(query_api_routes(db))
             else:
                 self.send_response(404)
                 self.end_headers()

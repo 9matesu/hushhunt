@@ -2,9 +2,11 @@ import json
 import urllib.request
 import threading
 from hushhunt.dashboard import (
-    query_summary,
+    query_api_routes,
     query_programs,
+    query_recent,
     query_signals_categorized,
+    query_summary,
     query_traffic_stats,
     query_verified_findings,
     run_server,
@@ -112,7 +114,7 @@ def test_api_routes_serve_json(tmp_path):
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:
-        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent", "/api/verified"):
+        for ep in ("/api/summary", "/api/programs", "/api/signals", "/api/traffic", "/api/recent", "/api/verified", "/api/api-routes"):
             with urllib.request.urlopen(f"http://127.0.0.1:{port}{ep}", timeout=5) as r:
                 assert r.status == 200
                 data = json.load(r)
