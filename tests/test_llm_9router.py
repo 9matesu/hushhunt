@@ -74,3 +74,29 @@ def test_complete_json_malformed_raises_contract(monkeypatch):
     _resp(body, monkeypatch)
     with pytest.raises(TriageContractError):
         LlmClient(cfg).complete_json("sys", "user")
+
+
+def test_complete_json_retries_on_missing_choices(monkeypatch):
+    cfg = _Cfg()
+    calls = []
+
+    class _R:
+        def __init__(self, data):
+            self._data = data
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._data
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append(json)
+        if len(calls) == 1:
+            return _R({"status": "processing"})  # missing choices
+        return _R({"choices": [{"message": {"content": '{"findings": []}'}}], "usage": {}})
+
+    monkeypatch.setattr("hushhunt.triage.llm.httpx.post", fake_post)
+    out = LlmClient(cfg).complete_json("sys", "user")
+    assert out == {"findings": []}
+    assert len(calls) == 2

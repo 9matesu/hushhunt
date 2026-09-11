@@ -69,17 +69,28 @@ class LlmClient:
             timeout=120)
         r.raise_for_status()
         payload = r.json()
-        usage = payload.get("usage") or {}
-        self.usage["prompt"] += int(usage.get("prompt_tokens") or 0)
-        self.usage["completion"] += int(usage.get("completion_tokens") or 0)
-        self.usage["cost_usd"] += self._cost(int(usage.get("prompt_tokens") or 0),
-                                             int(usage.get("completion_tokens") or 0))
-        self.usage["calls"] += 1
         try:
             content = payload["choices"][0]["message"]["content"]
             out = _extract_json(content)
-        except (KeyError, IndexError, ValueError) as e:
+        except (KeyError, IndexError, TypeError):
+            # Router sometimes streams a status chunk first (missing 'choices').
+            # One immediate retry with a minimal user-only prompt before failing.
+            try:
+                r2 = httpx.post(
+                    self.cfg["llm.base_url"].rstrip("/") + "/chat/completions",
+                    headers={"Authorization": f"Bearer {self.cfg.secret('HH_LLM_API_KEY')}"},
+                    json={"model": self.cfg["llm.model"], "stream": False,
+                          "messages": [{"role": "user", "content": user[-2000:]}]},
+                    timeout=120)
+                r2.raise_for_status()
+                payload = r2.json()
+                content = payload["choices"][0]["message"]["content"]
+                out = _extract_json(content)
+            except (KeyError, IndexError, TypeError, ValueError) as e2:
+                raise TriageContractError(str(e2)) from e2
+        except ValueError as e:
             raise TriageContractError(str(e)) from e
+        usage = payload.get("usage") or {}
         if not isinstance(out, dict):
             raise TriageContractError("reply is not a JSON object")
         return out
