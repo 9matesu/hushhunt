@@ -490,6 +490,10 @@ a:hover { text-decoration: underline; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M8 12l2 2 4-5"></path></svg>
       Verified Bugs &amp; Reports
     </button>
+    <button class="nav-btn" data-tab="tab-reasoning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"></path><path d="M9 21h6"></path></svg>
+      AI Reasoning Feed
+    </button>
     <button class="nav-btn" data-tab="tab-live">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
       Live Traffic &amp; Console
@@ -746,7 +750,25 @@ a:hover { text-decoration: underline; }
     </div>
   </section>
 
-  <!-- TAB 5: Live Traffic & Console -->
+  <!-- TAB 5: AI Reasoning Feed -->
+  <section class="tab-pane" id="tab-reasoning">
+    <div class="card">
+      <div class="card-header">
+        <h3>Why AI Did What It Did</h3>
+        <span class="card-subtitle" id="reasoning-count">Loading reasoning feed...</span>
+      </div>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:0;">
+        Every planner proposal and triager verdict below carries the model's own
+        one-line rationale. Planner rows show approved tests and rejections;
+        triage rows show why a signal was kept or dropped.
+      </p>
+      <div id="reasoning-feed" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="color:var(--text-muted)">Loading AI reasoning...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 6: Live Traffic & Console -->
   <section class="tab-pane" id="tab-live">
     <div class="card">
       <div class="card-header">
@@ -1087,6 +1109,48 @@ function copyActiveReport() {
   });
 }
 
+// 8. AI Reasoning Feed
+async function updateReasoning() {
+  try {
+    const res = await fetch('/api/reasoning');
+    if (!res.ok) return;
+    const items = await res.json();
+    const countEl = document.getElementById('reasoning-count');
+    if (countEl) countEl.textContent = `${items.length} decisions logged`;
+    const container = document.getElementById('reasoning-feed');
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);padding:14px;background:rgba(255,255,255,0.02);border-radius:6px;">No AI decisions logged yet. Autonomous loop runs will stream rationales here.</div>';
+      return;
+    }
+    container.innerHTML = items.map(r => {
+      const isPlanner = r.source === 'planner';
+      const badgeClass = isPlanner ? 'badge badge-paid' : 'badge badge-low';
+      const approved = (r.verdict || '').includes('approved') || (r.verdict || '').includes('triaged');
+      const verdStyle = approved ? 'color:var(--status-green);font-weight:600' : 'color:var(--text-muted)';
+      const ts = r.timestamp ? (r.timestamp.split('T')[1]?.split('.')[0] || r.timestamp) : '';
+      return `
+        <div style="padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid var(--border-subtle);border-radius:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="${badgeClass}">${esc(r.source.toUpperCase())}</span>
+              <b style="color:var(--text-primary);font-size:13px;">${esc(r.program_id)}</b>
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--accent-violet);">${esc(r.action)}</span>
+            </div>
+            <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">${esc(ts)}</span>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-bottom:6px;">Target: ${esc(r.target || 'N/A')} &nbsp;|&nbsp; Outcome: <span style="${verdStyle}">${esc(r.verdict)}</span></div>
+          <div style="color:var(--text-primary);font-size:12px;line-height:1.4;background:rgba(0,0,0,0.25);padding:8px 10px;border-radius:4px;border-left:3px solid var(--accent-violet);">
+            <b>Thought:</b> "${esc(r.rationale)}"
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error("Reasoning update failed:", e);
+  }
+}
+
 // Initial boot
 updateSummary();
 updateTraffic();
@@ -1094,6 +1158,7 @@ updateConsole();
 updateRecent();
 updateSignals();
 updateVerified();
+updateReasoning();
 loadPrograms();
 
 // Direct instant update timers (No whole-page reload)
@@ -1103,6 +1168,7 @@ setInterval(updateRecent, 2500);
 setInterval(updateTraffic, 3500);
 setInterval(updateSignals, 4500);
 setInterval(updateVerified, 4000);
+setInterval(updateReasoning, 4000);
 setInterval(loadPrograms, 30000);
 </script>
 </body>

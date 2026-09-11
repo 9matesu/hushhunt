@@ -91,6 +91,11 @@ class LlmClient:
         except ValueError as e:
             raise TriageContractError(str(e)) from e
         usage = payload.get("usage") or {}
+        self.usage["prompt"] += int(usage.get("prompt_tokens") or 0)
+        self.usage["completion"] += int(usage.get("completion_tokens") or 0)
+        self.usage["cost_usd"] += self._cost(int(usage.get("prompt_tokens") or 0),
+                                             int(usage.get("completion_tokens") or 0))
+        self.usage["calls"] += 1
         if not isinstance(out, dict):
             raise TriageContractError("reply is not a JSON object")
         return out
