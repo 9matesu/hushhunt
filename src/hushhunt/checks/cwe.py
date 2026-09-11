@@ -24,4 +24,5 @@ CWE_MAP: dict[str, str] = {
     "mass_assign": "CWE-915",              # mass assignment
     "cmd_inject": "CWE-77",                # command injection
     "nuclei_sweep": "CWE-1104",            # use of unmaintained third-party components (template-driven findings)
+    "exposed_services": "CWE-200",       # exposure of sensitive information (open admin ports)
 }
