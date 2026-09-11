@@ -72,11 +72,21 @@ def register_account(
     get_resp = http.get(signup_url)
     get_resp.raise_for_status()
 
+    captcha_token: str | None = None
     if CAPTCHA_PATTERN.search(get_resp.text):
-        raise RegistrationError(
-            f"CAPTCHA_REQUIRED on {signup_url}: manual registration needed, "
-            f"then store token via CLI flags (--cookie/--bearer/--auth-file)."
-        )
+        # Attempt automated solver when key present, else informative fallback
+        api_key = os.environ.get("HH_CAPTCHA_API_KEY")
+        if api_key:
+            from .captcha import extract_sitekey, solve_captcha
+            sitekey, ctype = extract_sitekey(get_resp.text)
+            if not sitekey:
+                raise RegistrationError(f"CAPTCHA_REQUIRED on {signup_url}: sitekey not found in form")
+            captcha_token = solve_captcha(signup_url, sitekey, ctype or "recaptcha", api_key=api_key, client=http)
+        else:
+            raise RegistrationError(
+                f"CAPTCHA_REQUIRED on {signup_url}: manual registration needed, "
+                f"then store token via CLI flags (--cookie/--bearer/--auth-file)."
+            )
     if JS_ONLY_PATTERN.search(get_resp.text) and "<form" not in get_resp.text.lower():
         raise RegistrationError(
             f"JS_REQUIRED on {signup_url}: no server-rendered form; "
@@ -89,6 +99,10 @@ def register_account(
     post_data = {user_field: email, password_field: password}
     if csrf_name and csrf_val:
         post_data[csrf_name] = csrf_val
+    if captcha_token:
+        post_data["g-recaptcha-response"] = captcha_token
+        post_data["cf-turnstile-response"] = captcha_token
+        post_data["h-captcha-response"] = captcha_token
 
     # 2. Submit signup form
     post_resp = http.post(signup_url, data=post_data)

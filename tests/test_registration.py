@@ -79,6 +79,45 @@ def test_register_account_captcha_flagged_for_manual():
         )
 
 
+def test_register_account_auto_solves_captcha_with_api_key(monkeypatch):
+    monkeypatch.setenv("HH_CAPTCHA_API_KEY", "dummy_key")
+    mailbox_mock = MagicMock()
+    mailbox_mock.email = "solved_user@1secmail.com"
+    mailbox_mock.wait_for_link.return_value = None
+
+    posted_payload = {}
+
+    def handler(req):
+        url_str = str(req.url)
+        if req.url.path == "/signup" and req.method == "GET":
+            return httpx.Response(200, text='<div class="g-recaptcha" data-sitekey="6LdRealSiteKey"></div>'
+                                            '<form action="/signup" method="POST"></form>')
+        if "in.php" in url_str:
+            return httpx.Response(200, text="OK|12345")
+        if "res.php" in url_str:
+            return httpx.Response(200, text="OK|SOLVED_TOKEN_PASS")
+        if req.url.path == "/signup" and req.method == "POST":
+            import urllib.parse
+            data = urllib.parse.parse_qs(req.content.decode())
+            posted_payload.update(data)
+            return httpx.Response(200, text="Success")
+        return httpx.Response(404)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    prog = {"id": "test-p", "policy_text": "", "includes": ["example.com"], "excludes": []}
+
+    acct = register_account(
+        signup_url="https://example.com/signup",
+        login_url="https://example.com/login",
+        program=prog,
+        mailbox=mailbox_mock,
+        client=client,
+        account_label="acct_solved",
+    )
+    assert acct["id"] == "acct_solved"
+    assert posted_payload.get("g-recaptcha-response") == ["SOLVED_TOKEN_PASS"]
+
+
 def test_register_account_js_required_flagged_for_manual():
     mailbox_mock = MagicMock()
     mailbox_mock.email = "hunter3@1secmail.com"
