@@ -75,6 +75,12 @@ def main(argv=None) -> int:
     bf_cmd.add_argument("--idor-only", action="store_true", help="run only IDOR checks")
     bf_cmd.add_argument("--active", action="store_true", help="run active injection checks")
     bf_cmd.add_argument("--import-db", action="store_true", help="store results into DB signals table")
+    reg = sub.add_parser("register", help="auto-provision disposable test accounts for a program")
+    reg.add_argument("--root", default=".")
+    reg.add_argument("--program", required=True, help="program ID (scope + policy gate)")
+    reg.add_argument("--signup-url", required=True, help="signup endpoint (must be in scope)")
+    reg.add_argument("--login-url", required=True, help="login endpoint (must be in scope)")
+    reg.add_argument("--dual", action="store_true", help="provision acct_a AND acct_b (IDOR diffing)")
     args = ap.parse_args(argv)
     cfg = _load_cfg(getattr(args, "root", "."))
     if args.cmd == "run-autonomous":
@@ -223,6 +229,7 @@ def main(argv=None) -> int:
         print(json.dumps({"findings_count": len(findings), "findings": findings}, indent=2))
         return 0 if not findings else 2
     if args.cmd == "bountyforge":
+        import json as _bfjson
         from .adapters.bountyforge import run_bountyforge_hunt, import_bountyforge_findings
         from .db import open_db
         conn = open_db(cfg.root / "var" / "hushhunt.db")
@@ -230,18 +237,16 @@ def main(argv=None) -> int:
         excludes: list[str] = []
         pid = getattr(args, "program", None)
         if pid:
-            import json as _json
             row = conn.execute("SELECT scope_json FROM programs WHERE id=?", (pid,)).fetchone()
             if row and row["scope_json"]:
-                scope = _json.loads(row["scope_json"])
+                scope = _bfjson.loads(row["scope_json"])
                 includes = scope.get("in_scope", scope.get("includes", []))
                 excludes = scope.get("out_of_scope", scope.get("excludes", []))
         else:
             # No program specified: derive scope from DB programs (default-deny).
-            import json as _json
             for r in conn.execute("SELECT scope_json FROM programs"):
                 if r["scope_json"]:
-                    scope = _json.loads(r["scope_json"])
+                    scope = _bfjson.loads(r["scope_json"])
                     includes.extend(scope.get("in_scope", scope.get("includes", [])))
                     excludes.extend(scope.get("out_of_scope", scope.get("excludes", [])))
         data = run_bountyforge_hunt(
@@ -261,7 +266,33 @@ def main(argv=None) -> int:
             n = import_bountyforge_findings(conn, pid, args.target, findings)
             conn.commit()
             print(f"IMPORTED {n}")
-        print(json.dumps(data, indent=2)[:4000])
+        print(_bfjson.dumps(data, indent=2)[:4000])
+        return 0
+    if args.cmd == "register":
+        import json as _rjson
+        from .registration import register_account, save_program_accounts
+        from .mail_pool import DisposableMailbox
+        from .db import open_db
+        from .sessions import accounts_path
+        conn = open_db(cfg.root / "var" / "hushhunt.db")
+        row = conn.execute("SELECT id, policy_text, scope_json FROM programs WHERE id=?",
+                           (args.program,)).fetchone()
+        if not row:
+            print(f"UNKNOWN-PROGRAM {args.program}")
+            return 1
+        scope = _rjson.loads(row["scope_json"] or "{}")
+        prog = {"id": row["id"], "policy_text": row["policy_text"] or "",
+                "includes": scope.get("in_scope", scope.get("includes", [])),
+                "excludes": scope.get("out_of_scope", scope.get("excludes", []))}
+        labels = ["acct_a", "acct_b"] if getattr(args, "dual", False) else ["acct_a"]
+        created = []
+        for label in labels:
+            acct = register_account(args.signup_url, args.login_url, prog,
+                                    mailbox=DisposableMailbox(), account_label=label)
+            created.append(acct)
+            print(f"REGISTERED {label} user={acct['user']}")
+        save_program_accounts(accounts_path(cfg), args.program, created)
+        print(f"SAVED {len(created)} account(s) -> {accounts_path(cfg)}")
         return 0
     return 1
 
