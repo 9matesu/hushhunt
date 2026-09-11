@@ -22,8 +22,27 @@ def _parse_robots(text: str) -> list[str]:
     return [m.group(1) for m in DISALLOW_RE.finditer(text or "")]
 
 
+def rank_frontier(llm, program: dict, candidates: list[str]) -> list[str]:
+    """Order crawl candidates by bounty likelihood. Fail-open: on any LLM
+    error return input order (never block the crawl)."""
+    if not candidates or llm is None:
+        return list(candidates)
+    import json as _json
+    sys = ("You rank crawl targets for an authorized bug-bounty scan. "
+           "Return ONLY JSON: {\"order\":[<exact subset of candidates, best first>]}. "
+           "Prefer: api/admin/auth/payment/graphql/swagger paths over marketing pages.")
+    try:
+        reply = llm.complete_json(sys, _json.dumps({
+            "program": program.get("id"), "candidates": candidates[:20]}))
+        order = [c for c in (reply.get("order") or []) if c in candidates]
+        order += [c for c in candidates if c not in order]
+        return order
+    except Exception:
+        return list(candidates)
+
+
 def crawl(cfg, conn, program: dict, transport=None,
-          max_pages: int = 25) -> dict:
+          max_pages: int = 25, llm=None) -> dict:
     """Politeness-first BFS crawler producing the param surface that active
     checks are ALLOWED to probe (v2 rule: never invent a parameter or path —
     only crawl-observed ones are testable). Same-origin only, robots.txt
@@ -56,6 +75,7 @@ def crawl(cfg, conn, program: dict, transport=None,
                        for b in blocked if b and b != "/")
 
     queue = [u for u in starts if allowed(u)]
+    queue = rank_frontier(llm, program, queue)
     seen: set[str] = set()
     pages = params_n = 0
     while queue and pages < max_pages:

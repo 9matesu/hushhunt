@@ -2,8 +2,9 @@ import httpx
 import pytest
 
 from hushhunt.config import Config
-from hushhunt.crawl import crawl
+from hushhunt.crawl import crawl, rank_frontier
 from hushhunt.db import open_db, upsert_program
+from hushhunt.triage.llm import FakeLlm
 
 LIMITS = {"limits": {"rate_per_second_per_target": 10000,
                      "daily_requests_per_program": 100,
@@ -74,3 +75,19 @@ def test_forms_collected(tmp_path):
     params = {(r["url"], r["param"]) for r in conn.execute(
         "SELECT url, param FROM params_seen")}
     assert ("/login", "username") in params
+
+
+def test_rank_frontier_orders_candidates():
+    candidates = ["https://t.invalid/home", "https://t.invalid/api/v1/user",
+                  "https://t.invalid/about"]
+    llm = FakeLlm([{"order": ["https://t.invalid/api/v1/user", "https://t.invalid/home"]}])
+    ordered = rank_frontier(llm, PROG, candidates)
+    assert ordered[0] == "https://t.invalid/api/v1/user"
+    assert "https://t.invalid/about" in ordered
+
+
+def test_rank_frontier_fail_open_on_error():
+    candidates = ["https://t.invalid/1", "https://t.invalid/2"]
+    llm = FakeLlm([ValueError("syntax error from llm")])
+    ordered = rank_frontier(llm, PROG, candidates)
+    assert ordered == candidates
