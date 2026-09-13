@@ -14,7 +14,7 @@ import shutil
 import subprocess
 
 from .grants import active_grant
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 
 MODULE = "nuclei_sweep"
 KEEP_SEVERITIES = {"critical", "high"}     # low-noise filter: known-CVEs only
@@ -74,8 +74,8 @@ def run_nuclei(cfg, conn, program: dict, urls: list[str],
     if not available():
         print("NUCLEI-WARN binary not installed; skipping")
         return []
-    scoped = [u for u in urls if url_in_scope(u, program["includes"],
-                                              program["excludes"])]
+    inc, exc = scope_of(program)
+    scoped = [u for u in urls if url_in_scope(u, inc, exc)]
     if not scoped:
         return []
     r = subprocess.run(build_command(scoped, program["id"]),

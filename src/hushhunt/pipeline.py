@@ -44,7 +44,7 @@ from .planner import plan as plan_tests
 from .policy_lint import allowed_module, lint_policy
 from .push import push_finding
 from .report import render_report
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 from .select import pick_targets
 from .sessions import SessionBroker, SessionError, load_accounts
 from .triage.engine import triage_asset
@@ -134,7 +134,7 @@ def probe_program(cfg, conn, program: dict, transport=None, ct_factory=None) -> 
     urls = _asset_urls(conn, program)[:MAX_ASSETS_PER_PROGRAM]
     n = 0
     for url in urls:
-        if not url_in_scope(url, program["includes"], program["excludes"]):
+        if not url_in_scope(url, *scope_of(program)):
             continue
         try:
             resp = hc.get(url)
@@ -473,13 +473,20 @@ def _poc_client(conn, cfg, program, transport):
 
 def run_nightly(cfg, llm=None, client_factory=None, verify_fetch=None,
                 transport=None, ct_factory=None, session_factory=None,
-                oast=None) -> str:
+                oast=None, only: str | None = None) -> str:
     conn = _load(cfg)
     na_kb = NaKb.load(_seeds_path(cfg))
     programs = sync(cfg, conn, client_factory=client_factory)
     # ponytail: injected transports mean offline test/sim — allow simulator program
     targets = pick_targets(conn, cfg, get_weights(conn),
                            include_simulator=transport is not None)
+    if only:
+        targets = [t for t in targets if t["id"] == only]
+        if not targets:
+            row = conn.execute("SELECT * FROM programs WHERE id=?", (only,)).fetchone()
+            targets = [dict(row)] if row else []
+            if not targets:
+                raise SystemExit(f"unknown program id: {only!r}")
     steer = drain_steer(cfg)          # operator input between runs (REDCELL port)
     if steer["skip"]:
         targets = [t for t in targets if t["id"] not in steer["skip"]]

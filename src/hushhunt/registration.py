@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from typing import Any
 import httpx
 
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 from .policy_lint import lint_policy
 from .mail_pool import DisposableMailbox
 
@@ -47,8 +47,7 @@ def register_account(
     password_field: str = "password",
 ) -> dict[str, Any]:
     """Execute automated registration flow strictly within scope and program policy."""
-    includes = program.get("includes", [])
-    excludes = program.get("excludes", [])
+    includes, excludes = scope_of(program)
 
     # Scope verification
     if not url_in_scope(signup_url, includes, excludes):

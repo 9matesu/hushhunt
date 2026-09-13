@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import re
+import secrets
 import time
 from urllib.parse import urlparse
 from typing import Any
 import httpx
 
-# ponytail: 1secmail primary with GuerrillaMail fallback, zero auth required
+# ponytail: 1secmail primary, GuerrillaMail then mail.tm fallback, zero auth.
+# Arlo prod SSO blocks every guerrillamail domain; mail.tm domains rotate clean.
 SECMAIL_API = "https://www.1secmail.com/api/v1/"
 GUERRILLA_API = "https://api.guerrillamail.com/ajax.php"
+MAILTM_API = "https://api.mail.tm"
 LINK_RE = re.compile(r'href=[\'"](https?://[^\'">\s]+)[\'"]', re.I)
 
 
@@ -29,6 +32,8 @@ class DisposableMailbox:
         self.client = client or httpx.Client(timeout=15.0)
         self.provider = "1secmail"
         self.sid_token = ""
+        self.token = ""          # mailtm bearer
+        self.password = ""       # mailtm account pw
         self.email = ""
         self.login = ""
         self.domain = ""
@@ -47,18 +52,44 @@ class DisposableMailbox:
 
         # Fallback to GuerrillaMail
         self.provider = "guerrillamail"
-        resp = self.client.get(f"{GUERRILLA_API}?f=get_email_address")
-        resp.raise_for_status()
-        data = resp.json()
-        self.email = data.get("email_addr", "")
-        self.sid_token = data.get("sid_token", "")
-        if "@" in self.email:
-            self.login, self.domain = self.email.split("@")
+        try:
+            resp = self.client.get(f"{GUERRILLA_API}?f=get_email_address")
+            resp.raise_for_status()
+            data = resp.json()
+            self.email = data.get("email_addr", "")
+            self.sid_token = data.get("sid_token", "")
+            if "@" in self.email and self.sid_token:
+                self.login, self.domain = self.email.split("@")
+                return
+        except Exception:
+            pass
+
+        # Last resort: mail.tm (JWT-based, random-but-clean domains)
+        self.provider = "mailtm"
+        try:
+            dom = self.client.get(f"{MAILTM_API}/domains").json()["hydra:member"][0]["domain"]
+            login = secrets.token_hex(6)
+            self.email = f"hush.{login}@{dom}"
+            self.password = secrets.token_hex(8) + "!aA1"
+            self.client.post(f"{MAILTM_API}/accounts",
+                             json={"address": self.email, "password": self.password})
+            self.token = self.client.post(f"{MAILTM_API}/token",
+                                          json={"address": self.email,
+                                                "password": self.password}).json()["token"]
+        except Exception as e:
+            raise RuntimeError("no disposable mailbox provider available") from e
 
     def check_messages(self) -> list[dict[str, Any]]:
         if self.provider == "1secmail":
             resp = self.client.get(f"{SECMAIL_API}?action=getMessages&login={self.login}&domain={self.domain}")
             return resp.json() if resp.status_code == 200 else []
+        elif self.provider == "mailtm":
+            resp = self.client.get(f"{MAILTM_API}/messages",
+                                   headers={"Authorization": f"Bearer {self.token}"})
+            if resp.status_code != 200:
+                return []
+            return [{"id": m["id"], "subject": m.get("subject", "")}
+                    for m in resp.json().get("hydra:member", [])]
         else:
             resp = self.client.get(f"{GUERRILLA_API}?f=check_email&seq=0&sid_token={self.sid_token}")
             if resp.status_code == 200:
@@ -71,6 +102,14 @@ class DisposableMailbox:
             resp = self.client.get(f"{SECMAIL_API}?action=readMessage&login={self.login}&domain={self.domain}&id={message_id}")
             resp.raise_for_status()
             return resp.json()
+        elif self.provider == "mailtm":
+            resp = self.client.get(f"{MAILTM_API}/messages/{message_id}",
+                                   headers={"Authorization": f"Bearer {self.token}"})
+            resp.raise_for_status()
+            j = resp.json()
+            html = j.get("html", "")
+            body = j.get("text", "") + " " + (" ".join(html) if isinstance(html, list) else html)
+            return {"body": body}
         else:
             resp = self.client.get(f"{GUERRILLA_API}?f=fetch_email&email_id={message_id}&sid_token={self.sid_token}")
             resp.raise_for_status()

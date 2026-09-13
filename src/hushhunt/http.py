@@ -9,7 +9,7 @@ import httpx
 
 from .db import count_requests_today, log_request
 from .evidence import save_capture
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 
 BANNED_METHODS = {"put", "patch", "delete", "options"}   # POST exists but is
 # grant-gated via post(); the others never do.
@@ -72,9 +72,8 @@ class HardenedClient:
                     follow_redirects=False)
 
     def _check(self, url: str, kind: str = "passive") -> None:
-        includes = self.program["includes"]
-        excludes = self.program["excludes"]
-        if not url_in_scope(url, includes, excludes):
+        inc, exc = scope_of(self.program)
+        if not url_in_scope(url, inc, exc):
             raise OutOfScope(url)
         rate = (self.cfg["limits.rate_per_second_per_target"] if kind == "passive"
                 else self.cfg["limits.active.burst_rate_per_second"])

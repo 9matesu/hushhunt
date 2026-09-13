@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 
 CRTS_H = "https://crt.sh"
 
@@ -40,7 +40,7 @@ def discover(conn, cfg, program: dict, client_factory=None) -> list[str]:
     # ponytail: strict 8s total timeout. crt.sh streams slowly when overloaded; skip quickly
     t_out = httpx.Timeout(8.0, connect=5.0)
     client = factory(timeout=t_out)
-    includes, excludes = program["includes"], program["excludes"]
+    includes, excludes = scope_of(program)
     added: list[str] = []
     for root in sorted(_roots(includes)):
         try:

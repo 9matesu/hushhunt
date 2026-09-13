@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from .checks.active import ACTIVE_MODULES
 from .grants import active_grant, risk_allows
 from .policy_lint import allowed_module
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 
 
 @dataclass
@@ -57,7 +57,7 @@ def validate(pt: PlannedTest, program: dict, conn, now=None,
         return "auto_demoted"
     if lint_blocked and not allowed_module(lint_blocked, pt.module):
         return "policy_blocked"
-    if not url_in_scope(pt.url, program["includes"], program["excludes"]):
+    if not url_in_scope(pt.url, *scope_of(program)):
         return "out_of_scope"
     cap = program.get("risk_cap", "passive")
     if not risk_allows(cap, _module_risk(pt.module)):

@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import json
 from urllib.parse import urlparse
+
+
+def scope_of(program: dict) -> tuple[list[str], list[str]]:
+    """(includes, excludes) from a stage dict OR a raw `programs` DB row.
+    pick_targets pre-normalizes; direct DB drives used to KeyError here."""
+    scope = json.loads(program.get("scope_json") or "{}")
+    return (program.get("includes") or scope.get("includes", []),
+            program.get("excludes") or scope.get("excludes", []))
 
 ALLOWED_SCHEMES = {"http", "https"}
 

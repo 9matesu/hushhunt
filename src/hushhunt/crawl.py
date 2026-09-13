@@ -8,7 +8,7 @@ import httpx
 
 from .api_miner import probe_api_schemas
 from .http import BudgetExceeded, HardenedClient, OutOfScope
-from .scope import url_in_scope
+from .scope import scope_of, url_in_scope
 
 LINK_RE = re.compile(r"<a[^>]+href=[\"']([^\"'#]+)[\"']", re.I)
 FORM_RE = re.compile(r"<form[^>]+action=[\"']([^\"']+)[\"'][^>]*>(.*?)</form>",
@@ -59,8 +59,8 @@ def crawl(cfg, conn, program: dict, transport=None,
         starts.append(ident if "://" in ident else f"https://{ident}/")
     blocked: list[str] = []
     robots_url = (starts[0].rstrip("/") + "/robots.txt") if starts else None
-    if robots_url and url_in_scope(robots_url, program["includes"],
-                                   program["excludes"]):
+    inc, exc = scope_of(program)
+    if robots_url and url_in_scope(robots_url, inc, exc):
         try:
             r = hc.get(robots_url)
             blocked = _parse_robots(r.text)
@@ -68,7 +68,7 @@ def crawl(cfg, conn, program: dict, transport=None,
             blocked = []
 
     def allowed(url: str) -> bool:
-        if not url_in_scope(url, program["includes"], program["excludes"]):
+        if not url_in_scope(url, inc, exc):
             return False
         path = urlparse(url).path
         return not any(path == b or path.startswith(b.rstrip("*"))

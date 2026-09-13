@@ -22,6 +22,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     nightly = sub.add_parser("run-nightly", help="full pipeline once")
     nightly.add_argument("--root", default=".")
+    nightly.add_argument("--program", default=None,
+                         help="pin this run to one program id (e.g. h1:engagements/arlo)")
     nightly.add_argument("--sim", action="store_true",
                          help="offline run against the built-in vulnapp (no network)")
     auto = sub.add_parser("run-autonomous",
@@ -33,6 +35,8 @@ def main(argv=None) -> int:
                       help="override llm.model for this loop (e.g. ag/claude-sonnet-4-6)")
     auto.add_argument("--max-cycles", type=int, default=3,
                       help="stop after N full passes (default 3; quiet stops earlier)")
+    auto.add_argument("--program", default=None,
+                      help="pin the loop to one program id (single-target dollar hunt)")
     learn = sub.add_parser("learn", help="record one human-observed outcome")
     learn.add_argument("--root", default=".")
     learn.add_argument("--outcome", required=True,
@@ -99,7 +103,7 @@ def main(argv=None) -> int:
         from .metaharness import append_loop_journal, export_hermes_findings
         for cycle in range(1, max_cycles + 1):
             print(f"\n--- CYCLE {cycle}/{max_cycles} ---")
-            line = run_nightly(cfg, llm=llm)
+            line = run_nightly(cfg, llm=llm, only=getattr(args, "program", None))
             import re
             m = dict(re.findall(r"(\w+)=(\S+)", line))
             try:
@@ -119,7 +123,7 @@ def main(argv=None) -> int:
             from .sim import run_sim
             run_sim(cfg)
         else:
-            run_nightly(cfg)
+            run_nightly(cfg, only=getattr(args, "program", None))
         return 0
     if args.cmd == "learn":
         from .db import open_db
