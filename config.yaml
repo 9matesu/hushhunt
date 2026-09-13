@@ -8,7 +8,7 @@ llm:
     claude-sonnet-4-6: [3.0, 15.0]
 limits:
   rate_per_second_per_target: 1
-  daily_requests_per_program: 900
+  daily_requests_per_program: 3000
   max_requests_per_asset: 60
   request_timeout_seconds: 10
   user_agent: "hushhunt/0.1 (hunter=matco; contact=<account email>; https://github.com/9matesu/hushhunt)"
