@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from .. import Ctx, register
+from .. import CHECK_CATALOG, CheckDef, Ctx, register
 
 
 @register("actuator_check", "WSTG-INFO-02", "passive")
@@ -68,3 +68,13 @@ def check_actuator(ctx: Ctx) -> list[dict]:
     except Exception:
         pass
     return out
+
+
+# The check emits two concrete signal IDs (index vs git leak) while the
+# registered entry above is the runner. Pipeline + verifier look up signals
+# by emitted ID, so alias both here — same WSTG, same passive risk, same fn
+# for live re-confirm. Without this probe_program KeyErrors on a hit.
+CHECK_CATALOG["actuator_index_exposed"] = CheckDef(
+    "actuator_index_exposed", "WSTG-INFO-02", "passive", check_actuator)
+CHECK_CATALOG["actuator_git_leak"] = CheckDef(
+    "actuator_git_leak", "WSTG-INFO-02", "passive", check_actuator)

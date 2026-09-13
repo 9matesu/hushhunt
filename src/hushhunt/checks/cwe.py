@@ -5,6 +5,10 @@ CWE_MAP: dict[str, str] = {
     # v1 passive
     "passive_headers": "CWE-693",          # protection mechanism failure
     "version_disclosure": "CWE-200",       # exposure of sensitive information
+    # actuator family (index, git leak, and the registered runner id)
+    "actuator_check": "CWE-200",
+    "actuator_index_exposed": "CWE-200",
+    "actuator_git_leak": "CWE-200",
     "tls_config": "CWE-326",               # inadequate encryption strength
     "exposed_files": "CWE-538",            # exposure of sensitive info to unauth actor
     "cors_misconfig": "CWE-942",           # permissive cross-domain policy

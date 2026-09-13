@@ -47,7 +47,7 @@ def check_xss_reflected(ctx: Ctx) -> list[dict]:
                 r = ctx.fetch(new_url)
             except Exception:
                 break
-            if any(c in probe for c in "<>\"'") and probe in r.text:
+            if ("<" in probe or ">" in probe) and probe in r.text:
                 vulnerable = (new_url, probe)
                 break               # proven: stop wasting probes
         if vulnerable:
